@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hybrid-intelligent-operator-sa
+  namespace: hybrid-apps
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hybrid-intelligent-operator-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: hybrid-intelligent-operator-rb
+subjects:
+  - kind: ServiceAccount
+    name: hybrid-intelligent-operator-sa
+    namespace: hybrid-apps
+roleRef:
+  kind: ClusterRole
+  name: hybrid-intelligent-operator-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hybrid-intelligent-operator
+  namespace: hybrid-apps
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hybrid-intelligent-operator
+  template:
+    metadata:
+      labels:
+        app: hybrid-intelligent-operator
+    spec:
+      serviceAccountName: hybrid-intelligent-operator-sa
+      containers:
+        - name: operator
+          image: openshift/hybrid-intelligent-operator:latest
+          imagePullPolicy: Always
