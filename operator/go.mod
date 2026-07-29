@@ -1,4 +1,4 @@
-module hybrid-eap-operator
+module hybrid-operator
 
 go 1.25.11
 
