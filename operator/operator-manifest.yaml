@@ -12,11 +12,14 @@ rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "watch", "delete"]
+  - apiGroups: ["operators.coreos.com"]
+    resources: ["subscriptions", "clusterserviceversions"]
+    verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: hybrid-intelligent-operator-rb
+  name: hybrid-intelligent-operator-binding
 subjects:
   - kind: ServiceAccount
     name: hybrid-intelligent-operator-sa
@@ -44,5 +47,5 @@ spec:
       serviceAccountName: hybrid-intelligent-operator-sa
       containers:
         - name: operator
-          image: openshift/hybrid-intelligent-operator:latest
+          image: default-route-openshift-image-registry.apps.sunbro.az.cee.support/hybrid-apps/hybrid-intelligent-operator:latest
           imagePullPolicy: Always
