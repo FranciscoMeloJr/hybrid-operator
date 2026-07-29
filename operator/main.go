@@ -11,8 +11,11 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	"hybrid-operator/pkg/collector"
 )
 
 type TelemetryPayload struct {
@@ -26,7 +29,6 @@ type BrainResponse struct {
 	GlobalClusterStatus string `json:"global_cluster_status"`
 }
 
-// Helper function to read from Env Vars with sensible fallbacks
 func getEnv(key, defaultValue string) string {
 	if val := os.Getenv(key); val != "" {
 		return val
@@ -35,34 +37,74 @@ func getEnv(key, defaultValue string) string {
 }
 
 func main() {
-	// Dynamically configure endpoint & targets via environment variables
 	brainURL := getEnv("BRAIN_SERVICE_URL", "http://brain-service.hybrid-apps.svc.cluster.local:5005/api/telemetry")
 	targetNamespace := getEnv("TARGET_NAMESPACE", "hybrid-apps")
 	targetLabel := getEnv("TARGET_LABEL", "predictive-monitoring=true")
 
-	// 1. Establish secure, in-cluster connection to the OpenShift API
+	// Establish in-cluster config
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		log.Fatalf("Fatal error loading cluster configuration: %v", err)
 	}
+
+	// Standard Kubernetes client
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		log.Fatalf("Fatal error creating clientset: %v", err)
 	}
 
-	log.Printf("[OPERATOR] Hybrid Intelligent Engine Loop Initialized connecting to %s. Actively listening...", brainURL)
+	// Dynamic client for OLM CRD querying
+	dynClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		log.Fatalf("Fatal error creating dynamic client: %v", err)
+	}
 
-	// 2. Continuous control loop
-	// Simulated leak value for demonstration tracking
+	log.Printf("[OPERATOR] Hybrid Intelligent Engine Initialized.")
+	log.Printf("[OPERATOR] Brain Endpoint: %s | Target NS: %s | Selector: %s", brainURL, targetNamespace, targetLabel)
+
+	// --- ROUTINE 1: OLM Operator Inventory Governance ---
+	go runGovernanceLoop(dynClient)
+
+	// --- ROUTINE 2: Proactive Telemetry & Mitigation Loop ---
+	runTelemetryLoop(clientset, brainURL, targetNamespace, targetLabel)
+}
+
+func runGovernanceLoop(dynClient dynamic.Interface) {
+	ticker := time.NewTicker(60 * time.Second)
+	defer ticker.Stop()
+
+	// Run initial collection immediately
+	collectOperators(dynClient)
+
+	for range ticker.C {
+		collectOperators(dynClient)
+	}
+}
+
+func collectOperators(dynClient dynamic.Interface) {
+	log.Println("[GOVERNANCE] Running OLM operator inventory sweep...")
+	ops, err := collector.TrackOperators(context.Background(), dynClient)
+	if err != nil {
+		log.Printf("[GOVERNANCE ERROR] Failed to query OLM resources: %v", err)
+		return
+	}
+
+	log.Printf("[GOVERNANCE] Discovered %d operator(s) on cluster:", len(ops))
+	for _, op := range ops {
+		log.Printf("  -> Sub: %-25s | Pkg: %-20s | NS: %-15s | Channel: %-10s | CSV: %-30s | Version: %-10s | Phase: %s",
+			op.Name, op.Package, op.Namespace, op.Channel, op.InstalledCSV, op.Version, op.Phase)
+	}
+}
+
+func runTelemetryLoop(clientset *kubernetes.Clientset, brainURL, namespace, labelSelector string) {
 	simulatedMemoryTracker := 420.0
 
 	for {
-		// Discover active target pods matching our label selector
-		pods, err := clientset.CoreV1().Pods(targetNamespace).List(context.TODO(), metav1.ListOptions{
-			LabelSelector: targetLabel,
+		pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
+			LabelSelector: labelSelector,
 		})
 		if err != nil {
-			log.Printf("[OPERATOR ERROR] Failed to fetch target pods: %v", err)
+			log.Printf("[TELEMETRY ERROR] Failed to list pods in %s: %v", namespace, err)
 			time.Sleep(10 * time.Second)
 			continue
 		}
@@ -72,36 +114,30 @@ func main() {
 				continue
 			}
 
-			// Simulating a runtime telemetry collection loop
 			payload := TelemetryPayload{
 				PodName:  pod.Name,
 				MemoryMb: simulatedMemoryTracker,
 			}
 
-			log.Printf("[OPERATOR] Telemetry outbound -> Pod: %s | Telemetry: %.1fMB", pod.Name, payload.MemoryMb)
+			log.Printf("[TELEMETRY] Outbound -> Pod: %s | Usage: %.1fMB", pod.Name, payload.MemoryMb)
 
-			// Send metric data out to the brain endpoint
 			action, reason, clusterStatus := sendToExternalBrain(brainURL, payload)
-			log.Printf("[OPERATOR] Brain Feedback Received -> Global Cluster State: %s | Assessment: %s", clusterStatus, action)
+			log.Printf("[TELEMETRY] Brain Feedback -> State: %s | Action: %s", clusterStatus, action)
 
-			// 3. Act on external intelligence decisions
 			if action == "RESTART_PROACTIVE" {
-				log.Printf("[MITIGATION ALARM] External brain flagged urgent issue: %s", reason)
-				log.Printf("[MITIGATION ACTION] Initiating proactive restart on pod: %s", pod.Name)
+				log.Printf("[MITIGATION ALARM] Brain flagged pod: %s (Reason: %s)", pod.Name, reason)
+				log.Printf("[MITIGATION ACTION] Evicting pod %s...", pod.Name)
 
-				// Proactively evict the leaky pod. Kubernetes deployment handles the clean rollout replacement.
-				err := clientset.CoreV1().Pods(targetNamespace).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+				err := clientset.CoreV1().Pods(namespace).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
 				if err != nil {
-					log.Printf("[OPERATOR ERROR] Failed to execute proactive eviction: %v", err)
+					log.Printf("[MITIGATION ERROR] Failed to evict pod: %v", err)
 				} else {
-					log.Println("[OPERATOR SUCCESS] Proactive pod eviction command successfully acknowledged by cluster.")
-					// Reset simulation baseline for the new rolling pod spin-up
+					log.Println("[MITIGATION SUCCESS] Pod successfully evicted.")
 					simulatedMemoryTracker = 420.0
 				}
 			}
 		}
 
-		// Slowly increment simulation over execution cycles to trigger the brain's linear progression curve
 		if len(pods.Items) > 0 {
 			simulatedMemoryTracker += 35.0
 		}
@@ -116,11 +152,10 @@ func sendToExternalBrain(brainURL string, payload TelemetryPayload) (string, str
 		return "NONE", "", "UNKNOWN"
 	}
 
-	// Create request timeout window
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Post(brainURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Printf("[OPERATOR] Communication failure reaching External Brain at %s: %v", brainURL, err)
+		log.Printf("[TELEMETRY ERROR] Cannot reach Brain at %s: %v", brainURL, err)
 		return "NONE", "", "UNKNOWN"
 	}
 	defer resp.Body.Close()
