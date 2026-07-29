@@ -1,7 +1,0 @@
-bin/
-*.out
-*.test
-__pycache__/
-*.pyc
-.idea/
-.vscode/
