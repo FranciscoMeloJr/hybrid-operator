@@ -9,8 +9,10 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source and compile optimization flags
-COPY main.go .
+# Copy full source tree (including pkg/ directory)
+COPY . .
+
+# Compile static binary with stripped symbol tables
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o hybrid-operator main.go
 
 # ==========================================
@@ -18,17 +20,20 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o hybrid-operator main.g
 # ==========================================
 FROM alpine:3.19
 
-# Install base trusted certs for outbound TLS/HTTPS to the Flask brain
+# Install trusted CA certs for outbound TLS/HTTPS calls to the telemetry brain
 RUN apk --no-cache add ca-certificates
 
-# Establish a neutral root-level path accessible to any arbitrary OpenShift UID
 WORKDIR /app
 
-# Bring binary over into the clean working directory
+# Copy binary from builder
 COPY --from=builder /app/hybrid-operator /app/hybrid-operator
 
-# Ensure explicit execution rights are set on the binary
-RUN chmod +x /app/hybrid-operator
+# OpenShift arbitrary UID compatibility (Group 0 permissions)
+RUN chmod +x /app/hybrid-operator && \
+    chgrp -R 0 /app && \
+    chmod -R g=u /app
 
-# Execute using relative path syntax matching the new WORKDIR context
-CMD ["./hybrid-operator"]
+# Run as non-root (OpenShift will override UID dynamically anyway)
+USER 10001
+
+ENTRYPOINT ["/app/hybrid-operator"]
