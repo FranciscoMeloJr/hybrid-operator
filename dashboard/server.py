@@ -2,12 +2,15 @@ import os
 from flask import Flask, jsonify, request, send_from_directory
 import numpy as np
 import logging
+import requests
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("brain-service")
 
 app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+GO_INVENTORY_URL = os.getenv("GO_INVENTORY_URL", "http://127.0.0.1:8080/api/v1/inventory")
 
 # --- ALL YOUR EXISTING API ROUTES STAY HERE ---
 # (@app.route('/api/telemetry', ...)
@@ -36,18 +39,12 @@ def serve_ui_assets(filename):
 
 @app.route('/api/v1/catalog/targets')
 def get_targets():
-    return jsonify({
-        "operators": [
-            {
-                "subscription": "hybrid-intelligent-operator",
-                "namespace": "hybrid-apps",
-                "channel": "alpha",
-                "canUpgrade": True,
-                "installedVersion": "v1.0.0",
-                "targetVersion": "v1.1.0"
-            }
-        ]
-    })
+    try:
+        res = requests.get(GO_INVENTORY_URL, timeout=3)
+        return (res.content, res.status_code, [("Content-Type", "application/json")])
+    except Exception as e:
+        logger.error(f"Failed to fetch inventory from local Go operator: {e}")
+        return jsonify({"error": f"Failed to reach local Go operator: {str(e)}", "operators": []}), 502
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5005)

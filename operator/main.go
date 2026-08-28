@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -27,6 +28,25 @@ type BrainResponse struct {
 	Action              string `json:"action"`
 	Reason              string `json:"reason"`
 	GlobalClusterStatus string `json:"global_cluster_status"`
+}
+
+var (
+	cacheLock sync.RWMutex
+	opCache   []collector.OperatorInfo
+)
+
+func inventoryHandler(w http.ResponseWriter, r *http.Request) {
+	cacheLock.RLock()
+	defer cacheLock.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	if opCache == nil {
+		opCache = []collector.OperatorInfo{}
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"operators": opCache,
+		"total":     len(opCache),
+	})
 }
 
 func getEnv(key, defaultValue string) string {
@@ -62,6 +82,15 @@ func main() {
 	log.Printf("[OPERATOR] Hybrid Intelligent Engine Initialized.")
 	log.Printf("[OPERATOR] Brain Endpoint: %s | Target NS: %s | Selector: %s", brainURL, targetNamespace, targetLabel)
 
+	// --- ROUTINE 0: Internal Inventory HTTP Server ---
+	go func() {
+		http.HandleFunc("/api/v1/inventory", inventoryHandler)
+		log.Println("[GO OPERATOR] Serving internal inventory API on 127.0.0.1:8080")
+		if err := http.ListenAndServe("127.0.0.1:8080", nil); err != nil {
+			log.Printf("[GO OPERATOR ERROR] Failed to start internal HTTP server: %v", err)
+		}
+	}()
+
 	// --- ROUTINE 1: OLM Operator Inventory Governance ---
 	go runGovernanceLoop(dynClient)
 
@@ -89,10 +118,13 @@ func collectOperators(dynClient dynamic.Interface) {
 		return
 	}
 
+	cacheLock.Lock()
+	opCache = ops
+	cacheLock.Unlock()
+
 	log.Printf("[GOVERNANCE] Discovered %d operator(s) on cluster:", len(ops))
 	for _, op := range ops {
-		log.Printf("  -> Sub: %-25s | Pkg: %-20s | NS: %-15s | Channel: %-10s | CSV: %-30s | Version: %-10s | Phase: %s",
-			op.Name, op.Package, op.Namespace, op.Channel, op.InstalledCSV, op.Version, op.Phase)
+		log.Printf("  -> Sub: %-25s | Pkg: %-20s | NS: %-15s | Channel: %-10s | CSV: %-30s | Version: %-10s | Phase: %s", op.Name, op.Package, op.Namespace, op.Channel, op.InstalledCSV, op.Version, op.Phase)
 	}
 }
 
@@ -103,6 +135,7 @@ func runTelemetryLoop(clientset *kubernetes.Clientset, brainURL, namespace, labe
 		pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
 			LabelSelector: labelSelector,
 		})
+
 		if err != nil {
 			log.Printf("[TELEMETRY ERROR] Failed to list pods in %s: %v", namespace, err)
 			time.Sleep(10 * time.Second)
@@ -120,7 +153,6 @@ func runTelemetryLoop(clientset *kubernetes.Clientset, brainURL, namespace, labe
 			}
 
 			log.Printf("[TELEMETRY] Outbound -> Pod: %s | Usage: %.1fMB", pod.Name, payload.MemoryMb)
-
 			action, reason, clusterStatus := sendToExternalBrain(brainURL, payload)
 			log.Printf("[TELEMETRY] Brain Feedback -> State: %s | Action: %s", clusterStatus, action)
 
