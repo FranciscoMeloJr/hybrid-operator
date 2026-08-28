@@ -1,89 +1,162 @@
-# brain.py
-from flask import Flask, request, jsonify
-import numpy as np
+import json
+import logging
+import re
 import threading
 import time
+from typing import Any, Dict, List, Tuple
+
+from flask import Flask, jsonify, request
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
+import numpy as np
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("brain-service")
 
 app = Flask(__name__)
 
-# Simple in-memory database to store rolling telemetry history per pod
-pod_history = {}
-MEMORY_LIMIT_MB = 512  # Threshold we want to predict against
+# =============================================================================
+# 1. STATE & STORAGE
+# =============================================================================
+pod_history: Dict[str, List[float]] = {}
+MEMORY_LIMIT_MB = 512  # Memory threshold to predict against
 
-# Global variable to store the latest cluster snapshot
-cluster_snapshot = {"status": "UNKNOWN", "nodes": [], "unhealthy_pods": []}
+# Global cache for the latest OLM inventory evaluated in Python
+evaluated_olm_inventory: List[Dict[str, Any]] = []
 
-def monitor_cluster_status():
-    """Background loop that connects directly to OpenShift to pull cluster health."""
-    print("[INIT] Starting background cluster visibility thread...")
+# =============================================================================
+# 2. HELPER FUNCTIONS & SEMVER PARSING
+# =============================================================================
+def parse_semver(version_str: str) -> Tuple[int, int, int]:
+    """Extracts major.minor.patch integers from version string."""
+    match = re.search(r"(\d+)\.(\d+)\.(\d+)", str(version_str))
+    if match:
+        return tuple(map(int, match.groups()))
+    return (0, 0, 0)
+
+# =============================================================================
+# 3. KUBERNETES OLM DISCOVERY (Python-native via CustomObjectsApi)
+# =============================================================================
+def collect_and_evaluate_olm_inventory():
+    """Reads Subscriptions & PackageManifests using standard Kubernetes API client."""
+    global evaluated_olm_inventory
+    
     try:
-        # Tries to load the same config your local 'oc' or 'kubectl' command uses
-        config.load_kube_config()
-    except Exception as e:
-        print(f"[ERROR] Could not load kubeconfig: {e}")
-        print("[WARN] External brain running without active cluster visibility.")
-        return
-
-    v1 = client.CoreV1Api()
-
-    while True:
+        config.load_incluster_config()
+    except Exception:
         try:
-            nodes_health = []
-            unhealthy_pods = []
-            cluster_healthy = True
-
-            # 1. Inspect Node Statuses
-            nodes = v1.list_node(timeout_seconds=5)
-            for node in nodes.items:
-                # Find the 'Ready' condition status
-                ready_status = next((c.status for c in node.status.conditions if c.type == 'Ready'), 'Unknown')
-                nodes_health.append({"name": node.metadata.name, "ready": ready_status})
-                if ready_status != "True":
-                    cluster_healthy = False
-
-            # 2. Inspect Pod Statuses across your target namespace
-            target_namespace = "eap-helm"
-            pods = v1.list_namespaced_pod(namespace=target_namespace, timeout_seconds=5)
-            for pod in pods.items:
-                if pod.status.phase not in ["Running", "Succeeded"]:
-                    unhealthy_pods.append({
-                        "name": pod.metadata.name,
-                        "phase": pod.status.phase,
-                        "message": pod.status.message or "Check logs/events"
-                    })
-
-            # Update our global memory cache
-            global cluster_snapshot
-            cluster_snapshot = {
-                "status": "HEALTHY" if (cluster_healthy and len(unhealthy_pods) == 0) else "DEGRADED",
-                "nodes": nodes_health,
-                "unhealthy_pods": unhealthy_pods,
-                "last_updated": time.strftime("%Y-%m-%d %H:%M:%S")
-            }
-
-            print(f"[CLUSTER VISIBILITY] Status: {cluster_snapshot['status']} | Active Nodes: {len(nodes_health)} | Unhealthy Pods in '{target_namespace}': {len(unhealthy_pods)}")
-
-        except ApiException as e:
-            print(f"[CLUSTER VISIBILITY ERROR] Failed to fetch OCP state: {e}")
+            config.load_kube_config()
         except Exception as e:
-            print(f"[CLUSTER VISIBILITY ERROR] Unexpected error: {e}")
+            logger.warning(f"Could not load kubeconfig: {e}")
+            return
 
-        time.sleep(15)  # Poll the cluster API every 15 seconds
+    custom_api = client.CustomObjectsApi()
+    
+    try:
+        # 1. Fetch all OLM Subscriptions across the cluster
+        subs = custom_api.list_cluster_custom_object(
+            group="operators.coreos.com",
+            version="v1alpha1",
+            plural="subscriptions"
+        )
+        
+        inventory = []
+        for item in subs.get("items", []):
+            spec = item.get("spec", {})
+            status = item.get("status", {})
+            metadata = item.get("metadata", {})
+            
+            pkg_name = spec.get("name") or spec.get("packageName")
+            channel = spec.get("channel", "")
+            namespace = metadata.get("namespace", "openshift-operators")
+            installed_csv = status.get("installedCSV", "")
+            current_version_str = status.get("currentCSV", "")
+            
+            # Extract semver string from CSV name if needed (e.g., 'my-op.v1.2.3' -> '1.2.3')
+            installed_ver = parse_semver(installed_csv)
+            installed_ver_str = f"{installed_ver[0]}.{installed_ver[1]}.{installed_ver[2]}"
 
+            target_csv = ""
+            target_ver_str = installed_ver_str
+            can_upgrade = False
+            upgrade_type = "NONE"
+
+            # 2. Query PackageManifest for target head in channel
+            if pkg_name:
+                try:
+                    pkg_manifest = custom_api.get_namespaced_custom_object(
+                        group="packages.operators.coreos.com",
+                        version="v1",
+                        namespace=namespace,
+                        plural="packagemanifests",
+                        name=pkg_name
+                    )
+                    
+                    channels = pkg_manifest.get("status", {}).get("channels", [])
+                    target_ch = next((ch for ch in channels if ch.get("name") == channel), None)
+                    
+                    if target_ch:
+                        csv_desc = target_ch.get("currentCSVDesc", {})
+                        target_csv = csv_desc.get("name", "")
+                        raw_target_ver = csv_desc.get("version", "")
+                        
+                        target_v = parse_semver(raw_target_ver or target_csv)
+                        target_ver_str = f"{target_v[0]}.{target_v[1]}.{target_v[2]}"
+
+                        if target_v > installed_ver:
+                            can_upgrade = True
+                            if target_v[0] > installed_ver[0]:
+                                upgrade_type = "MAJOR"
+                            elif target_v[1] > installed_ver[1]:
+                                upgrade_type = "MINOR"
+                            else:
+                                upgrade_type = "PATCH"
+                                
+                except ApiException as e:
+                    logger.debug(f"Could not fetch PackageManifest '{pkg_name}': {e.reason}")
+
+            inventory.append({
+                "subscription": metadata.get("name"),
+                "package": pkg_name,
+                "namespace": namespace,
+                "channel": channel,
+                "installed_csv": installed_csv,
+                "installed_version": installed_ver_str,
+                "target_csv": target_csv,
+                "target_version": target_ver_str,
+                "can_upgrade": can_upgrade,
+                "upgrade_type": upgrade_type
+            })
+
+        evaluated_olm_inventory = inventory
+        logger.info(f"[DISCOVERY] Evaluated {len(inventory)} OLM Subscriptions via Python K8s Client.")
+
+    except Exception as e:
+        logger.error(f"[DISCOVERY ERROR] Failed to run OLM evaluation: {e}")
+
+def background_discovery_loop():
+    """Runs OLM evaluation loop every 30 seconds."""
+    while True:
+        collect_and_evaluate_olm_inventory()
+        time.sleep(30)
+
+# =============================================================================
+# 4. REST API ENDPOINTS
+# =============================================================================
+
+# A. Pod Memory Telemetry (Workload Predictive Analysis)
 @app.route('/api/telemetry', methods=['POST'])
 def receive_telemetry():
-    data = request.json
+    data = request.json or {}
     pod_name = data.get('pod_name')
-    current_mem = data.get('memory_mb')  # Current memory in MB
+    current_mem = data.get('memory_mb')
     
     if not pod_name or current_mem is None:
         return jsonify({"error": "Invalid telemetry payload"}), 400
 
-    # Maintain a sliding window of the last 5 data points
     if pod_name not in pod_history:
         pod_history[pod_name] = []
+    
     pod_history[pod_name].append(current_mem)
     if len(pod_history[pod_name]) > 5:
         pod_history[pod_name].pop(0)
@@ -92,38 +165,43 @@ def receive_telemetry():
     action = "NONE"
     reason = "Normal operating parameters"
 
-    # If we have enough data points, calculate the trajectory
     if len(history) >= 3:
         x = np.arange(len(history))
         y = np.array(history)
-        slope, intercept = np.polyfit(x, y, 1)
+        slope, _ = np.polyfit(x, y, 1)
 
-        # If the slope is positive, predict future usage
         if slope > 0:
-            projected_mem_next_cycle = history[-1] + slope
-            if projected_mem_next_cycle > MEMORY_LIMIT_MB:
+            projected_mem = history[-1] + slope
+            if projected_mem > MEMORY_LIMIT_MB:
                 action = "RESTART_PROACTIVE"
-                reason = f"Memory leak projected. Next cycle expected {projected_mem_next_cycle:.1f}MB, exceeding limit of {MEMORY_LIMIT_MB}MB."
+                reason = f"Memory leak projected ({projected_mem:.1f}MB exceeds limit of {MEMORY_LIMIT_MB}MB)."
 
-    print(f"[BRAIN] Pod: {pod_name} | History: {history} | Action Decision: {action}")
+    return jsonify({"action": action, "reason": reason}), 200
+
+# B. Catalog Targets & Upgrade Eligibility
+@app.route('/api/v1/catalog/targets', methods=['GET'])
+def get_catalog_targets():
+    upgradeable = [op for op in evaluated_olm_inventory if op["can_upgrade"]]
     return jsonify({
-        "action": action, 
-        "reason": reason,
-        "global_cluster_status": cluster_snapshot["status"]
+        "total": len(evaluated_olm_inventory),
+        "upgradeable_count": len(upgradeable),
+        "operators": evaluated_olm_inventory
     }), 200
 
-# Endpoint to let you check what the brain sees from a browser or curl command
+# C. Brain Context / Debug Endpoint
 @app.route('/api/brain-context', methods=['GET'])
 def get_brain_context():
     return jsonify({
-        "telemetry_memory_histories": pod_history,
-        "cluster_view": cluster_snapshot
+        "pod_memory_histories": pod_history,
+        "operator_inventory": evaluated_olm_inventory
     }), 200
 
+# =============================================================================
+# 5. ENTRYPOINT
+# =============================================================================
 if __name__ == '__main__':
-    # Spin up the OpenShift monitoring loop in a background thread
-    bg_thread = threading.Thread(target=monitor_cluster_status, daemon=True)
-    bg_thread.start()
+    # Start Python background discovery loop
+    thread = threading.Thread(target=background_discovery_loop, daemon=True)
+    thread.start()
     
-    # Runs outside OCP on port 5005
     app.run(host='0.0.0.0', port=5005)
