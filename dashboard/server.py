@@ -1,10 +1,10 @@
 import os
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, render_template
 import numpy as np
 import logging
 import requests
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("brain-service")
 
 app = Flask(__name__)
@@ -21,15 +21,12 @@ GO_INVENTORY_URL = os.getenv("GO_INVENTORY_URL", "http://127.0.0.1:8080/api/v1/i
 # =============================================================================
 @app.route("/")
 def index():
-    """Serves the main dashboard HTML[cite: 1]."""
-    ui_dir = os.path.join(BASE_DIR, "ui")
-    resp = send_from_directory(ui_dir, "index.html")
-    resp.headers["Cache-Control"] = "no-store"
-    return resp
+    """Serves the main dashboard HTML."""
+    return render_template("index.html")
 
 @app.route("/ui/<path:filename>")
 def serve_ui_assets(filename):
-    """Serves decoupled JS/CSS assets[cite: 1]."""
+    """Serves decoupled JS/CSS assets."""
     ui_dir = os.path.join(BASE_DIR, "ui")
     if os.path.exists(os.path.join(ui_dir, filename)):
         resp = send_from_directory(ui_dir, filename)
@@ -46,5 +43,14 @@ def get_targets():
         logger.error(f"Failed to fetch inventory from local Go operator: {e}")
         return jsonify({"error": f"Failed to reach local Go operator: {str(e)}", "operators": []}), 502
 
+# Add these routes below your existing index route
+@app.route('/help')
+def help_page():
+    return render_template('help.html')
+
+@app.route('/features')
+def features_page():
+    return render_template('features.html')
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5005)
+    app.run(host='0.0.0.0', port=5005, debug=True)

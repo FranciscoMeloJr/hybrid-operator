@@ -1,29 +1,33 @@
 #!/usr/bin/env bash
 set -e
 
+# ==============================================================================
+# Global Variables
+# ==============================================================================
 NAMESPACE="hybrid-apps"
 BRANCH_NAME="feat/multi-container-pod"
 TARGET_NODE="worker-node-redacted"
 
-echo "=================================================="
-echo " 1. Git Branch Setup"
-echo "=================================================="
-if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
-    echo "Switching to existing branch: $BRANCH_NAME"
-    git checkout "$BRANCH_NAME"
-else
-    echo "Creating new branch: $BRANCH_NAME"
-    git checkout -b "$BRANCH_NAME"
-fi
+# ==============================================================================
+# Function: setup_git_branch
+# ==============================================================================
+setup_git_branch() {
+    if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
+        echo "--> Switching to existing branch: $BRANCH_NAME"
+        git checkout "$BRANCH_NAME"
+    else
+        echo "--> Creating new branch: $BRANCH_NAME"
+        git checkout -b "$BRANCH_NAME"
+    fi
+}
 
-echo "=================================================="
-echo " 2. Namespace & RBAC Setup"
-echo "=================================================="
-# Ensure project namespace exists
-oc get project "$NAMESPACE" >/dev/null 2>&1 || oc new-project "$NAMESPACE"
+# ==============================================================================
+# Function: setup_namespace_and_rbac
+# ==============================================================================
+setup_namespace_and_rbac() {
+    oc get project "$NAMESPACE" >/dev/null 2>&1 || oc new-project "$NAMESPACE"
 
-# Apply ServiceAccount, ClusterRole, and ClusterRoleBinding
-cat <<EOF | oc apply -f -
+    cat <<EOF | oc apply -f -
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -55,15 +59,16 @@ roleRef:
   name: hybrid-intelligent-operator-role
   apiGroup: rbac.authorization.k8s.io
 EOF
+}
 
-echo "=================================================="
-echo " 3. Re-creating BuildConfigs with Docker Strategy"
-echo "=================================================="
-# Delete existing auto-detected S2I BuildConfigs if present
-oc delete bc hybrid-operator -n "$NAMESPACE" --ignore-not-found
-oc delete bc dashboard -n "$NAMESPACE" --ignore-not-found
+# ==============================================================================
+# Function: setup_buildconfigs (BUMPED RESOURCES for faster compilation)
+# ==============================================================================
+setup_buildconfigs() {
+    oc delete bc hybrid-operator -n "$NAMESPACE" --ignore-not-found
+    oc delete bc dashboard -n "$NAMESPACE" --ignore-not-found
 
-cat <<EOF | oc apply -f -
+    cat <<EOF | oc apply -f -
 apiVersion: image.openshift.io/v1
 kind: ImageStream
 metadata:
@@ -88,6 +93,13 @@ spec:
     type: Binary
   strategy:
     type: Docker
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
   output:
     to:
       kind: ImageStreamTag
@@ -105,24 +117,25 @@ spec:
     type: Binary
   strategy:
     type: Docker
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
   output:
     to:
       kind: ImageStreamTag
       name: dashboard:latest
 EOF
+}
 
-# Build Go Operator container image from ./operator directory
-echo "--> Building Go Operator container image..."
-oc start-build hybrid-operator --from-dir=./operator --follow -n "$NAMESPACE"
-
-# Build Python Dashboard container image from ./dashboard directory
-echo "--> Building Web Dashboard container image..."
-oc start-build dashboard --from-dir=./dashboard --follow -n "$NAMESPACE"
-
-echo "=================================================="
-echo " 4. Applying Multi-Container Pod Deployment & Networking"
-echo "=================================================="
-cat <<EOF | oc apply -f -
+# ==============================================================================
+# Function: deploy_application
+# ==============================================================================
+deploy_application() {
+    cat <<EOF | oc apply -f -
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -151,7 +164,7 @@ spec:
                     values:
                       - ${TARGET_NODE}
       containers:
-        # Container 1: Go Operator Engine (Collector & Internal Inventory API on 127.0.0.1:8080)
+        # Container 1: Go Operator Engine
         - name: go-operator
           image: image-registry.openshift-image-registry.svc:5000/${NAMESPACE}/hybrid-operator:latest
           imagePullPolicy: Always
@@ -160,7 +173,7 @@ spec:
               cpu: 100m
               memory: 128Mi
 
-        # Container 2: Python Web Console (Dashboard UI on port 5005)
+        # Container 2: Python Web Console
         - name: web-dashboard
           image: image-registry.openshift-image-registry.svc:5000/${NAMESPACE}/dashboard:latest
           imagePullPolicy: Always
@@ -203,17 +216,82 @@ spec:
     termination: edge
     insecureEdgeTerminationPolicy: Redirect
 EOF
+}
 
-echo "=================================================="
-echo " 5. Verifying Deployment Rollout"
-echo "=================================================="
-oc rollout status deployment/console-hybrid-app -n "$NAMESPACE"
+# ==============================================================================
+# Function: build_images_and_wait
+# ==============================================================================
+build_images_and_wait() {
+    echo "--> Starting Go Operator container build (in background)..."
+    oc start-build hybrid-operator --from-dir=./operator --follow -n "$NAMESPACE" &
+    PID_OPERATOR=$!
 
-ROUTE_URL=$(oc get route console-hybrid-app -n "$NAMESPACE" -o jsonpath='{.spec.host}')
+    echo "--> Starting Web Dashboard container build (in background)..."
+    oc start-build dashboard --from-dir=./dashboard --follow -n "$NAMESPACE" &
+    PID_DASHBOARD=$!
 
-echo ""
-echo "=================================================="
-echo " Deployment Complete!"
-echo " Both 'go-operator' and 'web-dashboard' are running in 1 Pod."
-echo " Web Console URL: https://${ROUTE_URL}"
-echo "=================================================="
+    echo "--> Waiting for both builds to complete..."
+    wait $PID_OPERATOR
+    wait $PID_DASHBOARD
+    echo "--> Both builds completed successfully!"
+}
+
+# ==============================================================================
+# Function: verify_rollout
+# ==============================================================================
+verify_rollout() {
+    # Force a rollout restart to bypass any Kubelet ImagePullBackOff timers 
+    # that started while the deployment was waiting for the builds to finish
+    echo "--> Triggering fresh rollout to pick up newly built images..."
+    oc rollout restart deployment/console-hybrid-app -n "$NAMESPACE"
+
+    oc rollout status deployment/console-hybrid-app -n "$NAMESPACE"
+
+    ROUTE_URL=$(oc get route console-hybrid-app -n "$NAMESPACE" -o jsonpath='{.spec.host}')
+
+    echo ""
+    echo "=================================================="
+    echo " Deployment Complete!"
+    echo " Both 'go-operator' and 'web-dashboard' are running in 1 Pod."
+    echo " Web Console URL: https://${ROUTE_URL}"
+    echo "=================================================="
+}
+
+# ==============================================================================
+# Main Execution Flow
+# ==============================================================================
+main() {
+    echo "=================================================="
+    echo " 1. Git Branch Setup"
+    echo "=================================================="
+    setup_git_branch
+
+    echo "=================================================="
+    echo " 2. Namespace & RBAC Setup"
+    echo "=================================================="
+    setup_namespace_and_rbac
+
+    echo "=================================================="
+    echo " 3. Re-creating BuildConfigs with Elevated Resources"
+    echo "=================================================="
+    setup_buildconfigs
+
+    echo "=================================================="
+    echo " 4. Applying Multi-Container Pod Deployment First"
+    echo "=================================================="
+    # Deploying now stages the infrastructure while builds process
+    deploy_application
+
+    echo "=================================================="
+    echo " 5. Building Images (Parallel)"
+    echo "=================================================="
+    build_images_and_wait
+
+    echo "=================================================="
+    echo " 6. Verifying Deployment Rollout"
+    echo "=================================================="
+    verify_rollout
+}
+
+# Execute script
+main "$@"
