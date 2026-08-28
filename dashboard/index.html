@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hybrid Operator Console</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-950 text-gray-200 antialiased min-h-screen p-6">
+
+  <header class="border-b border-gray-800 pb-4 mb-6 flex justify-between items-center">
+    <div>
+      <h1 class="text-2xl font-bold text-white">OLM Governance Console</h1>
+      <p class="text-sm text-gray-400">Powered by Flask & Hybrid Operator Sensor</p>
+    </div>
+    <button onclick="fetchTargets()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded shadow transition">
+      Refresh Data
+    </button>
+  </header>
+
+  <div class="grid grid-cols-1 gap-4" id="operatorGrid">
+    <div class="text-center text-gray-500 py-10">Waiting for Operator Telemetry...</div>
+  </div>
+
+  <script src="/ui/app.js"></script>
+</body>
+</html>
