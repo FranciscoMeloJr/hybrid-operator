@@ -3,6 +3,8 @@ import logging
 import re
 import threading
 import time
+import os
+import requests
 from typing import Any, Dict, List, Tuple
 
 from flask import Flask, jsonify, request
@@ -12,7 +14,6 @@ import numpy as np
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("brain-service")
-
 app = Flask(__name__)
 
 # =============================================================================
@@ -75,7 +76,7 @@ def collect_and_evaluate_olm_inventory():
             # Extract semver string from CSV name if needed (e.g., 'my-op.v1.2.3' -> '1.2.3')
             installed_ver = parse_semver(installed_csv)
             installed_ver_str = f"{installed_ver[0]}.{installed_ver[1]}.{installed_ver[2]}"
-
+            
             target_csv = ""
             target_ver_str = installed_ver_str
             can_upgrade = False
@@ -169,7 +170,6 @@ def receive_telemetry():
         x = np.arange(len(history))
         y = np.array(history)
         slope, _ = np.polyfit(x, y, 1)
-
         if slope > 0:
             projected_mem = history[-1] + slope
             if projected_mem > MEMORY_LIMIT_MB:
@@ -181,7 +181,17 @@ def receive_telemetry():
 # B. Catalog Targets & Upgrade Eligibility
 @app.route('/api/v1/catalog/targets', methods=['GET'])
 def get_catalog_targets():
-    upgradeable = [op for op in evaluated_olm_inventory if op["can_upgrade"]]
+    # Attempt to proxy to the richer Go Operator Backend data first
+    try:
+        go_url = os.environ.get("GO_INVENTORY_URL", "http://127.0.0.1:8080/api/v1/inventory")
+        resp = requests.get(go_url, timeout=5)
+        if resp.status_code == 200:
+            return jsonify(resp.json()), 200
+    except Exception as e:
+        logger.error(f"[PROXY ERROR] Could not reach Go sensor at {go_url}: {e}")
+        
+    # Fallback to the Python memory cache if the Go Sensor is unreachable
+    upgradeable = [op for op in evaluated_olm_inventory if op.get("can_upgrade")]
     return jsonify({
         "total": len(evaluated_olm_inventory),
         "upgradeable_count": len(upgradeable),

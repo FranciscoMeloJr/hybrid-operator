@@ -39,12 +39,12 @@ kind: ClusterRole
 metadata:
   name: hybrid-intelligent-operator-role
 rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["pods"]
-    verbs: ["get", "list", "watch", "delete"]
-  - apiGroups: ["operators.coreos.com", "packages.operators.coreos.com"]
-    resources: ["subscriptions", "clusterserviceversions", "packagemanifests"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -233,6 +233,7 @@ build_images_and_wait() {
     echo "--> Waiting for both builds to complete..."
     wait $PID_OPERATOR
     wait $PID_DASHBOARD
+
     echo "--> Both builds completed successfully!"
 }
 
@@ -244,11 +245,10 @@ verify_rollout() {
     # that started while the deployment was waiting for the builds to finish
     echo "--> Triggering fresh rollout to pick up newly built images..."
     oc rollout restart deployment/console-hybrid-app -n "$NAMESPACE"
-
     oc rollout status deployment/console-hybrid-app -n "$NAMESPACE"
 
     ROUTE_URL=$(oc get route console-hybrid-app -n "$NAMESPACE" -o jsonpath='{.spec.host}')
-
+    
     echo ""
     echo "=================================================="
     echo " Deployment Complete!"

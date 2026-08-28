@@ -1,39 +1,289 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Features - OLM Governance Console</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hybrid Operator - Feature Roadmap</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/styles.css">
 </head>
-<body class="page-wrapper">
-    
-    <header class="console-header">
-        <div class="flex items-center gap-4">
-            <img src="/static/logo.png" alt="Apotheosis Logo" class="h-10 w-auto object-contain">
-            <h1 class="text-xl font-bold text-white">Platform Features</h1>
-        </div>
-        <a href="/" class="btn btn-secondary">&larr; Back to Dashboard</a>
-    </header>
+<body class="bg-gray-950 text-gray-200 antialiased min-h-screen p-6">
 
-    <div class="bg-[#161b22] border border-[#30363d] rounded-lg p-6 mt-6 shadow-sm">
-        <h3 class="text-lg font-bold text-white mb-4">Upcoming Roadmap</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="border border-[#30363d] p-4 rounded bg-[#0d1117]">
-                <h4 class="font-bold text-white mb-1">1. Hierarchical Tree View</h4>
-                <p class="text-sm" style="color: var(--text-muted)">Expand operators to see child CRDs and active Custom Resources.</p>
-            </div>
-            <div class="border border-[#30363d] p-4 rounded bg-[#0d1117]">
-                <h4 class="font-bold text-white mb-1">2. Suggested Fixes</h4>
-                <p class="text-sm" style="color: var(--text-muted)">Actionable remediation steps for failing or blocked operators.</p>
-            </div>
-            <div class="border border-[#30363d] p-4 rounded bg-[#0d1117]">
-                <h4 class="font-bold text-white mb-1">3. Operator Manipulation</h4>
-                <p class="text-sm" style="color: var(--text-muted)">Install, uninstall, or switch update channels directly from the UI.</p>
-            </div>
-        </div>
+  <!-- Header Section -->
+  <header class="border-b border-gray-800 pb-4 mb-6 flex justify-between items-center">
+    <div class="flex items-center gap-4">
+      <img src="/static/logo.png" alt="Apotheosis Logo" class="h-12 w-auto object-contain">
+      <div>
+        <h1 class="text-2xl font-bold text-white">Hybrid Operator Roadmap</h1>
+        <p class="text-sm text-gray-400">Feature Backlog & Implementation Status Matrix</p>
+      </div>
     </div>
+    
+    <div class="flex items-center gap-3">
+      <a href="/" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded shadow transition text-sm font-medium">
+        Back to Console
+      </a>
+      <a href="/help" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-2 rounded shadow transition text-sm font-medium">
+        Help
+      </a>
+    </div>
+  </header>
+
+  <!-- Main Roadmap Table Container -->
+  <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-xl overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm text-gray-300">
+        <thead class="bg-gray-950 text-xs font-semibold uppercase text-gray-400 border-b border-gray-800">
+          <tr>
+            <th scope="col" class="px-4 py-3.5 w-12 text-center">#</th>
+            <th scope="col" class="px-4 py-3.5">Feature</th>
+            <th scope="col" class="px-4 py-3.5">Description</th>
+            <th scope="col" class="px-4 py-3.5 w-32">Status</th>
+            <th scope="col" class="px-4 py-3.5 w-28 text-center">Story Points</th>
+            <th scope="col" class="px-4 py-3.5">Frontend (Flask / HTML / JS)</th>
+            <th scope="col" class="px-4 py-3.5">Backend (Go Operator / Infra)</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-800/60 font-sans">
+          
+          <!-- Feature 1 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">1</td>
+            <td class="px-4 py-4 font-bold text-white">UI Branding</td>
+            <td class="px-4 py-4 text-gray-400">Add the Apotheosis logo (<code class="text-xs bg-gray-950 px-1.5 py-0.5 rounded text-blue-400">logo.png</code>).</td>
+            <td class="px-4 py-4">
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">1 SP</td>
+            <td class="px-4 py-4 text-xs">Added image to <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">static/</code> folder and updated header in <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">index.html</code>.</td>
+            <td class="px-4 py-4 text-xs text-gray-500 italic">None</td>
+          </tr>
+
+          <!-- Feature 2 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">2</td>
+            <td class="px-4 py-4 font-bold text-white">Current Version Display</td>
+            <td class="px-4 py-4 text-gray-400">Replace Target Version with Current Version on operator cards.</td>
+            <td class="px-4 py-4">
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">2 SP</td>
+            <td class="px-4 py-4 text-xs">Displays active installed version badge in top right.</td>
+            <td class="px-4 py-4 text-xs">Extracted <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">spec.version</code> / <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">installedCSV</code> in Go <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">collector.go</code>.</td>
+          </tr>
+
+          <!-- Feature 3 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">3</td>
+            <td class="px-4 py-4 font-bold text-white">Live CRD Inspector</td>
+            <td class="px-4 py-4 text-gray-400">Expandable CRD list on clicking an operator card.</td>
+            <td class="px-4 py-4">
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">3 SP</td>
+            <td class="px-4 py-4 text-xs">Card drawer displaying CRD Kind, Version, Name, and Description.</td>
+            <td class="px-4 py-4 text-xs">Parsed <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">spec.customresourcedefinitions.owned</code> from CSV in Go.</td>
+          </tr>
+
+          <!-- Feature 4 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">4</td>
+            <td class="px-4 py-4 font-bold text-white">Dynamic OCP Server Detection</td>
+            <td class="px-4 py-4 text-gray-400">Query live OCP server version directly via <code class="text-xs bg-gray-950 px-1.5 py-0.5 rounded text-blue-400">ClusterVersion</code>.</td>
+            <td class="px-4 py-4">
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">3 SP</td>
+            <td class="px-4 py-4 text-xs">Header badges updated dynamically in <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">index.html</code> and <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">app.js</code>.</td>
+            <td class="px-4 py-4 text-xs">Added <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">GetClusterGovernance()</code> to <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">collector.go</code> and updated <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">main.go</code> to handle <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">[]collector.OperatorInfo</code> safely.</td>
+          </tr>
+
+          <!-- Feature 5 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">5</td>
+            <td class="px-4 py-4 font-bold text-white">Analytics Charts Dashboard</td>
+            <td class="px-4 py-4 text-gray-400">Visual lifecycle status (doughnut) and channel stream distribution (bar) charts.</td>
+            <td class="px-4 py-4">
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">3 SP</td>
+            <td class="px-4 py-4 text-xs">Integrated Chart.js canvas elements and rendering logic.</td>
+            <td class="px-4 py-4 text-xs">Driven client-side from <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/api/v1/catalog/targets</code> JSON payload.</td>
+          </tr>
+
+          <!-- Feature 6 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">6</td>
+            <td class="px-4 py-4 font-bold text-white">Summary Dashboard Metrics</td>
+            <td class="px-4 py-4 text-gray-400">High-level overview cards (Total, Up to Date, Updates Pending, Major Risks).</td>
+            <td class="px-4 py-4">
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">2 SP</td>
+            <td class="px-4 py-4 text-xs">Added grid of 4 metric summary cards above the operator grid.</td>
+            <td class="px-4 py-4 text-xs">Driven client-side from <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/api/v1/catalog/targets</code> JSON payload.</td>
+          </tr>
+
+          <!-- Feature 7 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">7</td>
+            <td class="px-4 py-4 font-bold text-white">Export Governance Report</td>
+            <td class="px-4 py-4 text-gray-400">Download a JSON snapshot report of cluster OLM state.</td>
+            <td class="px-4 py-4">
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">2 SP</td>
+            <td class="px-4 py-4 text-xs">Added "Export Report" button and client-side JSON exporter.</td>
+            <td class="px-4 py-4 text-xs">Serves live inventory payload from <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">server.py</code> and Go collector.</td>
+          </tr>
+
+          <!-- Feature 8 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">8</td>
+            <td class="px-4 py-4 font-bold text-white">Help & Features Pages</td>
+            <td class="px-4 py-4 text-gray-400">Dedicated navigation pages for documentation and roadmap.</td>
+            <td class="px-4 py-4">
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">1 SP</td>
+            <td class="px-4 py-4 text-xs">Added <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/help</code> and <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/features</code> Flask routes and HTML templates.</td>
+            <td class="px-4 py-4 text-xs text-gray-500 italic">None</td>
+          </tr>
+
+          <!-- Feature 9 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">9</td>
+            <td class="px-4 py-4 font-bold text-white">Upgrade Time & Downtime Predictor</td>
+            <td class="px-4 py-4 text-gray-400">Predict cluster maintenance window duration based on nodes, operators, and active operand pods.</td>
+            <td class="px-4 py-4">
+              <span class="bg-gray-800 border border-gray-700 text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Planned</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">3 SP</td>
+            <td class="px-4 py-4 text-xs">Add "Est. Maintenance Duration" metric card and subtext breakdown on dashboard.</td>
+            <td class="px-4 py-4 text-xs">Add <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">calculateUpgradeTime()</code> heuristic engine evaluating worker node rollout + CSV reconcile + pod restart deltas.</td>
+          </tr>
+
+          <!-- Feature 10 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">10</td>
+            <td class="px-4 py-4 font-bold text-white">Real-Time Operator Cost Footprint</td>
+            <td class="px-4 py-4 text-gray-400">Calculate monthly CPU, Memory, and PVC infrastructure cost per operator.</td>
+            <td class="px-4 py-4">
+              <span class="bg-gray-800 border border-gray-700 text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Planned</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">5 SP</td>
+            <td class="px-4 py-4 text-xs">Add <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">$ / mo</code> cost badges and compute/storage cost breakdown bar on cards.</td>
+            <td class="px-4 py-4 text-xs">Go collector fetches container CPU/RAM requests; Python Brain applies pricing unit rates.</td>
+          </tr>
+
+          <!-- Feature 11 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">11</td>
+            <td class="px-4 py-4 font-bold text-white">Upgrade Cost & Capacity Impact</td>
+            <td class="px-4 py-4 text-gray-400">Simulate financial and node capacity headroom impact of upgrading to target CSV.</td>
+            <td class="px-4 py-4">
+              <span class="bg-gray-800 border border-gray-700 text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Planned</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">5 SP</td>
+            <td class="px-4 py-4 text-xs">Display resource delta (<code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">+vCPU/RAM</code>) and projected cost change (<code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">+$ / mo</code>) in card drawer.</td>
+            <td class="px-4 py-4 text-xs">Python Brain parses target CSV deployment spec and checks node capacity headroom.</td>
+          </tr>
+
+          <!-- Feature 12 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">12</td>
+            <td class="px-4 py-4 font-bold text-white">Idle / Waste Operator Detection</td>
+            <td class="px-4 py-4 text-gray-400">Flag installed operators with 0 active CRs to reclaim wasted compute.</td>
+            <td class="px-4 py-4">
+              <span class="bg-gray-800 border border-gray-700 text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Planned</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">3 SP</td>
+            <td class="px-4 py-4 text-xs">Render "Idle Waste Warning" banner with potential monthly savings summary.</td>
+            <td class="px-4 py-4 text-xs">Correlate CSV owned CRDs with active CR instance counts in Go/Python.</td>
+          </tr>
+
+          <!-- Feature 13 -->
+          <tr class="hover:bg-gray-850/50 transition bg-blue-950/20">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">13</td>
+            <td class="px-4 py-4 font-bold text-blue-300">Live Custom Resource (CR) Instances</td>
+            <td class="px-4 py-4 text-gray-400">View active CR instances under each CRD.</td>
+            <td class="px-4 py-4">
+              <span class="bg-blue-950 border border-blue-800 text-blue-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block animate-pulse">Next Focus</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-blue-400">5 SP</td>
+            <td class="px-4 py-4 text-xs">Add clickable sub-panel under CRD to list live instances.</td>
+            <td class="px-4 py-4 text-xs">Extend Go collector/dynamic client to query CR instance endpoints.</td>
+          </tr>
+
+          <!-- Feature 14 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">14</td>
+            <td class="px-4 py-4 font-bold text-white">Health & Status Indicators</td>
+            <td class="px-4 py-4 text-gray-400">Real-time operational health of operators and operands.</td>
+            <td class="px-4 py-4">
+              <span class="bg-purple-950 border border-purple-800 text-purple-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">In Progress</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">3 SP</td>
+            <td class="px-4 py-4 text-xs">Display status pills (Succeeded, Failed, Upgrading).</td>
+            <td class="px-4 py-4 text-xs">Fetch CSV phase and operand deployment status via <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">collector.go</code>.</td>
+          </tr>
+
+          <!-- Feature 15 -->
+          <tr class="hover:bg-gray-850/50 transition bg-amber-950/20">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">15</td>
+            <td class="px-4 py-4 font-bold text-amber-300">OCP Next Release Impact Predictor</td>
+            <td class="px-4 py-4 text-gray-400">Project operator compatibility and blocker conditions for next OCP minor version.</td>
+            <td class="px-4 py-4">
+              <span class="bg-amber-950 border border-amber-800 text-amber-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Paused</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-amber-400">8 SP</td>
+            <td class="px-4 py-4 text-xs">Top impact alert banner, OCP ready/blocker pills, and blocker reasons on cards.</td>
+            <td class="px-4 py-4 text-xs">Query <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">ClusterVersion</code> in <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">collector.go</code> to calculate current vs next OCP minor version and evaluate CSV readiness.</td>
+          </tr>
+
+          <!-- Feature 16 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">16</td>
+            <td class="px-4 py-4 font-bold text-white">Channel Switcher</td>
+            <td class="px-4 py-4 text-gray-400">Switch channels or approval modes from UI.</td>
+            <td class="px-4 py-4">
+              <span class="bg-gray-800 border border-gray-700 text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Planned</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">5 SP</td>
+            <td class="px-4 py-4 text-xs">Add "Manage Subscription" modal with channel dropdown.</td>
+            <td class="px-4 py-4 text-xs">Add <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">PATCH</code> handler for <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">Subscription</code> CRs in Go/Flask.</td>
+          </tr>
+
+          <!-- Feature 17 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">17</td>
+            <td class="px-4 py-4 font-bold text-white">Controller Pod Metrics</td>
+            <td class="px-4 py-4 text-gray-400">Live metrics/logs for operator controller pod.</td>
+            <td class="px-4 py-4">
+              <span class="bg-gray-800 border border-gray-700 text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Planned</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">5 SP</td>
+            <td class="px-4 py-4 text-xs">Show pod counts, memory/CPU badges, and error logs.</td>
+            <td class="px-4 py-4 text-xs">Query backing deployments and pods matching operator labels.</td>
+          </tr>
+
+          <!-- Feature 18 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">18</td>
+            <td class="px-4 py-4 font-bold text-white">Helm Chart Deployment</td>
+            <td class="px-4 py-4 text-gray-400">Package framework into a standardized Helm chart.</td>
+            <td class="px-4 py-4">
+              <span class="bg-gray-800 border border-gray-700 text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Planned</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">3 SP</td>
+            <td class="px-4 py-4 text-xs text-gray-500 italic">None</td>
+            <td class="px-4 py-4 text-xs">Create <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">charts/hybrid-operator</code> directory with templates and <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">values.yaml</code>.</td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+  </div>
 
 </body>
 </html>

@@ -9,12 +9,12 @@ kind: ClusterRole
 metadata:
   name: hybrid-intelligent-operator-role
 rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["pods"]
-    verbs: ["get", "list", "watch", "delete"]
-  - apiGroups: ["operators.coreos.com"]
-    resources: ["subscriptions", "clusterserviceversions"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

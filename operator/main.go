@@ -32,7 +32,7 @@ type BrainResponse struct {
 
 var (
 	cacheLock sync.RWMutex
-	opCache   []collector.OperatorInfo
+	opCache   collector.ClusterGovernanceResponse
 )
 
 func inventoryHandler(w http.ResponseWriter, r *http.Request) {
@@ -40,12 +40,14 @@ func inventoryHandler(w http.ResponseWriter, r *http.Request) {
 	defer cacheLock.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
-	if opCache == nil {
-		opCache = []collector.OperatorInfo{}
+	if opCache.Operators == nil {
+		opCache.Operators = []collector.OperatorInfo{}
 	}
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"operators": opCache,
-		"total":     len(opCache),
+		"ocp_current_version": opCache.OCPCurrentVersion,
+		"ocp_next_version":    opCache.OCPNextVersion,
+		"operators":           opCache.Operators,
+		"total":               opCache.Total,
 	})
 }
 
@@ -112,18 +114,18 @@ func runGovernanceLoop(dynClient dynamic.Interface) {
 
 func collectOperators(dynClient dynamic.Interface) {
 	log.Println("[GOVERNANCE] Running OLM operator inventory sweep...")
-	ops, err := collector.TrackOperators(context.Background(), dynClient)
+	govResp, err := collector.GetClusterGovernance(context.Background(), dynClient)
 	if err != nil {
 		log.Printf("[GOVERNANCE ERROR] Failed to query OLM resources: %v", err)
 		return
 	}
 
 	cacheLock.Lock()
-	opCache = ops
+	opCache = govResp
 	cacheLock.Unlock()
 
-	log.Printf("[GOVERNANCE] Discovered %d operator(s) on cluster:", len(ops))
-	for _, op := range ops {
+	log.Printf("[GOVERNANCE] Discovered %d operator(s) on cluster:", len(govResp.Operators))
+	for _, op := range govResp.Operators {
 		log.Printf("  -> Sub: %-25s | Pkg: %-20s | NS: %-15s | Channel: %-10s | CSV: %-30s | Version: %-10s | Phase: %s", op.Name, op.Package, op.Namespace, op.Channel, op.InstalledCSV, op.Version, op.Phase)
 	}
 }
@@ -135,7 +137,6 @@ func runTelemetryLoop(clientset *kubernetes.Clientset, brainURL, namespace, labe
 		pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
 			LabelSelector: labelSelector,
 		})
-
 		if err != nil {
 			log.Printf("[TELEMETRY ERROR] Failed to list pods in %s: %v", namespace, err)
 			time.Sleep(10 * time.Second)
@@ -159,7 +160,6 @@ func runTelemetryLoop(clientset *kubernetes.Clientset, brainURL, namespace, labe
 			if action == "RESTART_PROACTIVE" {
 				log.Printf("[MITIGATION ALARM] Brain flagged pod: %s (Reason: %s)", pod.Name, reason)
 				log.Printf("[MITIGATION ACTION] Evicting pod %s...", pod.Name)
-
 				err := clientset.CoreV1().Pods(namespace).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
 				if err != nil {
 					log.Printf("[MITIGATION ERROR] Failed to evict pod: %v", err)
@@ -173,7 +173,6 @@ func runTelemetryLoop(clientset *kubernetes.Clientset, brainURL, namespace, labe
 		if len(pods.Items) > 0 {
 			simulatedMemoryTracker += 35.0
 		}
-
 		time.Sleep(10 * time.Second)
 	}
 }

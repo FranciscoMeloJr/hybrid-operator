@@ -1,0 +1,18 @@
+<div class="flex items-center gap-3 bg-gray-900 border border-gray-800 px-3 py-1.5 rounded-lg shadow-inner">
+  <div class="relative flex items-center justify-center w-5 h-5">
+    <svg class="w-full h-full transform -rotate-90" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="transparent" class="text-gray-800" />
+      <circle id="timerProgress" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="transparent"
+              stroke-dasharray="62.83" stroke-dashoffset="0" class="text-blue-500 transition-all duration-1000 ease-linear" />
+    </svg>
+  </div>
+  <span id="refreshTimerText" class="text-xs font-mono text-gray-300 w-9 text-center">60s</span>
+  <div class="h-4 w-px bg-gray-700"></div>
+  <select id="refreshInterval" onchange="updateRefreshInterval()" class="bg-transparent text-gray-400 text-xs font-medium focus:outline-none cursor-pointer appearance-none hover:text-white transition">
+    <option value="30" class="bg-gray-900">30s</option>
+    <option value="60" class="bg-gray-900" selected>1m</option>
+    <option value="300" class="bg-gray-900">5m</option>
+    <option value="600" class="bg-gray-900">10m</option>
+    <option value="0" class="bg-gray-900">Off</option>
+  </select>
+</div>

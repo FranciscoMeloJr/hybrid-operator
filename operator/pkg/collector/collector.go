@@ -6,6 +6,7 @@ import (
 	"log"
 	"regexp"
 	"strconv"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -29,6 +30,11 @@ var (
 		Version:  "v1",
 		Resource: "packagemanifests",
 	}
+	clusterVersionGVR = schema.GroupVersionResource{
+		Group:    "config.openshift.io",
+		Version:  "v1",
+		Resource: "clusterversions",
+	}
 )
 
 type CRDInfo struct {
@@ -37,21 +43,34 @@ type CRDInfo struct {
 	Version     string `json:"version"`
 	DisplayName string `json:"displayName"`
 	Description string `json:"description"`
+	ActiveCount int    `json:"active_count"`
 }
 
 type OperatorInfo struct {
-	Name          string    `json:"name"`
-	Package       string    `json:"package"`
-	Namespace     string    `json:"namespace"`
-	Channel       string    `json:"channel"`
-	InstalledCSV  string    `json:"installedCSV"`
-	Version       string    `json:"version"`
-	Phase         string    `json:"phase"`
-	TargetVersion string    `json:"target_version"`
-	TargetCSV     string    `json:"target_csv"`
-	CanUpgrade    bool      `json:"can_upgrade"`
-	UpgradeType   string    `json:"upgrade_type"`
-	CRDs          []CRDInfo `json:"crds"`
+	Name             string    `json:"name"`
+	Package          string    `json:"package"`
+	Namespace        string    `json:"namespace"`
+	Channel          string    `json:"channel"`
+	InstalledCSV     string    `json:"installedCSV"`
+	Version          string    `json:"version"`
+	Phase            string    `json:"phase"`
+	TargetVersion    string    `json:"target_version"`
+	TargetCSV        string    `json:"target_csv"`
+	CanUpgrade       bool      `json:"can_upgrade"`
+	UpgradeType      string    `json:"upgrade_type"`
+	CRDs             []CRDInfo `json:"crds"`
+	OCPBlocker       bool      `json:"ocp_blocker"`
+	OCPBlockerReason string    `json:"ocp_blocker_reason"`
+	OCPNextSupported bool      `json:"ocp_next_supported"`
+	IsIdle           bool      `json:"is_idle"`
+	ActiveCRs        int       `json:"active_crs"`
+}
+
+type ClusterGovernanceResponse struct {
+	OCPCurrentVersion string         `json:"ocp_current_version"`
+	OCPNextVersion    string         `json:"ocp_next_version"`
+	Operators         []OperatorInfo `json:"operators"`
+	Total             int            `json:"total"`
 }
 
 func parseSemver(versionStr string) [3]int {
@@ -76,7 +95,48 @@ func isVersionGreater(target, current [3]int) bool {
 	return target[2] > current[2]
 }
 
+func getOCPVersions(ctx context.Context, dynClient dynamic.Interface) (string, string) {
+	current := "4.20.16"
+
+	cv, err := dynClient.Resource(clusterVersionGVR).Get(ctx, "version", metav1.GetOptions{})
+	if err == nil {
+		desiredVer, found, _ := unstructured.NestedString(cv.Object, "status", "desired", "version")
+		if found && desiredVer != "" {
+			current = desiredVer
+		} else {
+			history, found, _ := unstructured.NestedSlice(cv.Object, "status", "history")
+			if found && len(history) > 0 {
+				if item, ok := history[0].(map[string]interface{}); ok {
+					if ver, ok := item["version"].(string); ok && ver != "" {
+						current = ver
+					}
+				}
+			}
+		}
+	}
+
+	parts := strings.Split(current, ".")
+	next := "4.21.0"
+	if len(parts) >= 2 {
+		major, _ := strconv.Atoi(parts[0])
+		minor, _ := strconv.Atoi(parts[1])
+		next = fmt.Sprintf("%d.%d.0", major, minor+1)
+	}
+
+	return current, next
+}
+
 func TrackOperators(ctx context.Context, dynClient dynamic.Interface) ([]OperatorInfo, error) {
+	resp, err := GetClusterGovernance(ctx, dynClient)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Operators, nil
+}
+
+func GetClusterGovernance(ctx context.Context, dynClient dynamic.Interface) (ClusterGovernanceResponse, error) {
+	ocpCurrent, ocpNext := getOCPVersions(ctx, dynClient)
+
 	csvMap := make(map[string]struct {
 		Version string
 		Phase   string
@@ -114,6 +174,7 @@ func TrackOperators(ctx context.Context, dynClient dynamic.Interface) ([]Operato
 						Version:     ver,
 						DisplayName: dispName,
 						Description: desc,
+						ActiveCount: 0,
 					})
 				}
 			}
@@ -133,7 +194,7 @@ func TrackOperators(ctx context.Context, dynClient dynamic.Interface) ([]Operato
 
 	subs, err := dynClient.Resource(subscriptionGVR).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list subscriptions: %w", err)
+		return ClusterGovernanceResponse{}, fmt.Errorf("failed to list subscriptions: %w", err)
 	}
 
 	var results []OperatorInfo
@@ -155,17 +216,22 @@ func TrackOperators(ctx context.Context, dynClient dynamic.Interface) ([]Operato
 		}
 
 		op := OperatorInfo{
-			Name:          name,
-			Package:       packageName,
-			Namespace:     namespace,
-			Channel:       channel,
-			InstalledCSV:  installedCSV,
-			Phase:         "Unknown",
-			TargetVersion: "0.0.0",
-			TargetCSV:     installedCSV,
-			CanUpgrade:    false,
-			UpgradeType:   "NONE",
-			CRDs:          []CRDInfo{},
+			Name:             name,
+			Package:          packageName,
+			Namespace:        namespace,
+			Channel:          channel,
+			InstalledCSV:     installedCSV,
+			Phase:            "Unknown",
+			TargetVersion:    "0.0.0",
+			TargetCSV:        installedCSV,
+			CanUpgrade:       false,
+			UpgradeType:      "NONE",
+			CRDs:             []CRDInfo{},
+			OCPBlocker:       false,
+			OCPBlockerReason: "None",
+			OCPNextSupported: true,
+			IsIdle:           false,
+			ActiveCRs:        0,
 		}
 
 		if installedCSV != "" {
@@ -177,11 +243,42 @@ func TrackOperators(ctx context.Context, dynClient dynamic.Interface) ([]Operato
 			}
 		}
 
+		// Calculate total active Custom Resource instances across all owned CRDs
+		activeCRCount := 0
+		for i := range op.CRDs {
+			// CRD names are formatted as <plural>.<group>
+			parts := strings.SplitN(op.CRDs[i].Name, ".", 2)
+			if len(parts) == 2 {
+				gvr := schema.GroupVersionResource{
+					Group:    parts[1],
+					Version:  op.CRDs[i].Version,
+					Resource: parts[0],
+				}
+				crs, err := dynClient.Resource(gvr).List(ctx, metav1.ListOptions{})
+				if err == nil {
+					op.CRDs[i].ActiveCount = len(crs.Items)
+					activeCRCount += len(crs.Items)
+				}
+			}
+		}
+		op.ActiveCRs = activeCRCount
+
+		// Mark operator as idle only if it provides CRDs but none are instantiated
+		if len(op.CRDs) > 0 && activeCRCount == 0 {
+			op.IsIdle = true
+		}
+
 		if op.Version == "" {
 			installedVer := parseSemver(installedCSV)
 			op.Version = fmt.Sprintf("%d.%d.%d", installedVer[0], installedVer[1], installedVer[2])
 		}
 		op.TargetVersion = op.Version
+
+		if op.Phase == "Failed" {
+			op.OCPBlocker = true
+			op.OCPNextSupported = false
+			op.OCPBlockerReason = "Operator in Failed state blocks OCP payload reconciliation"
+		}
 
 		if packageName != "" {
 			pm, err := dynClient.Resource(packageManifestGVR).Namespace(namespace).Get(ctx, packageName, metav1.GetOptions{})
@@ -224,6 +321,8 @@ func TrackOperators(ctx context.Context, dynClient dynamic.Interface) ([]Operato
 								op.CanUpgrade = true
 								if targVer[0] > currVer[0] {
 									op.UpgradeType = "MAJOR"
+									op.OCPBlocker = true
+									op.OCPBlockerReason = fmt.Sprintf("Pending MAJOR operator upgrade (%s -> %s) may introduce schema breaking changes on OCP %s", op.Version, op.TargetVersion, ocpNext)
 								} else if targVer[1] > currVer[1] {
 									op.UpgradeType = "MINOR"
 								} else {
@@ -240,5 +339,10 @@ func TrackOperators(ctx context.Context, dynClient dynamic.Interface) ([]Operato
 		results = append(results, op)
 	}
 
-	return results, nil
+	return ClusterGovernanceResponse{
+		OCPCurrentVersion: ocpCurrent,
+		OCPNextVersion:    ocpNext,
+		Operators:         results,
+		Total:             len(results),
+	}, nil
 }
