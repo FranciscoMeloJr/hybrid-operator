@@ -102,6 +102,16 @@ async function fetchTargets() {
 // ============================================================================
 // METRICS & UNIFIED MODAL LOGIC
 // ============================================================================
+function getNormalizedPackageName(op) {
+  if (op.package && op.package.trim() !== "") {
+    return op.package.trim().toLowerCase();
+  }
+  return (op.name || "")
+    .toLowerCase()
+    .replace(/-(operator|sub|subscription).*/g, '')
+    .trim();
+}
+
 function updateMetrics(operators) {
   const total = operators.length;
   const upgradeable = operators.filter(op => op.can_upgrade).length;
@@ -109,11 +119,47 @@ function updateMetrics(operators) {
   const idleCount = operators.filter(op => op.is_idle).length;
   const upToDate = total - upgradeable;
 
-  if (document.getElementById('metricTotal')) document.getElementById('metricTotal').textContent = total;
-  if (document.getElementById('metricUpToDate')) document.getElementById('metricUpToDate').textContent = upToDate;
-  if (document.getElementById('metricUpgradeable')) document.getElementById('metricUpgradeable').textContent = upgradeable;
-  if (document.getElementById('metricMajorRisk')) document.getElementById('metricMajorRisk').textContent = majorRisk;
-  if (document.getElementById('metricIdle')) document.getElementById('metricIdle').textContent = idleCount;
+  const degradedCount = operators.filter(op => 
+    op.phase === 'Failed' || 
+    op.phase === 'UpgradeFailed' || 
+    op.phase === 'InstallPlanFailed' ||
+    op.phase === 'Unknown' ||
+    op.phase === 'Pending'
+  ).length;
+
+  const overloadedCount = operators.filter(op => (op.restarts && op.restarts > 5) || op.oom_killed).length;
+  const pendingCount = operators.filter(op => op.approval_status === 'RequiresApproval').length;
+  const orphanedCount = operators.filter(op => op.has_orphans).length;
+
+  const packageGroups = {};
+  operators.forEach(op => {
+    const pkg = getNormalizedPackageName(op);
+    if (!packageGroups[pkg]) packageGroups[pkg] = [];
+    packageGroups[pkg].push(op);
+  });
+  
+  let conflictCount = 0;
+  Object.values(packageGroups).forEach(group => {
+    if (group.length > 1) {
+      conflictCount += group.length;
+    }
+  });
+
+  const setMetric = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  };
+
+  setMetric('metricTotal', total);
+  setMetric('metricUpToDate', upToDate);
+  setMetric('metricUpgradeable', upgradeable);
+  setMetric('metricMajorRisk', majorRisk);
+  setMetric('metricIdle', idleCount);
+  setMetric('metricConflict', conflictCount);
+  setMetric('metricDegraded', degradedCount);
+  setMetric('metricOverloaded', overloadedCount);
+  setMetric('metricPending', pendingCount);
+  setMetric('metricOrphaned', orphanedCount);
 }
 
 function openMetricModal(type) {
@@ -167,6 +213,52 @@ function openMetricModal(type) {
       color = 'text-purple-400';
       borderClass = 'hover:border-purple-500/50';
       break;
+    case 'conflict':
+      title = '🚨 Cross-Namespace Conflicts';
+      desc = 'Operators installed multiple times across different namespaces causing OLM split-brain.';
+      const pkgCounts = {};
+      currentOperatorData.forEach(op => { 
+        const pkg = getNormalizedPackageName(op);
+        pkgCounts[pkg] = (pkgCounts[pkg] || 0) + 1; 
+      });
+      ops = currentOperatorData.filter(op => pkgCounts[getNormalizedPackageName(op)] > 1);
+      color = 'text-red-400';
+      borderClass = 'hover:border-red-500/50';
+      break;
+    case 'degraded':
+      title = '❌ Degraded / Failed';
+      desc = 'Operators currently in a Failed phase or unresolved status.';
+      ops = currentOperatorData.filter(op => 
+        op.phase === 'Failed' || 
+        op.phase === 'UpgradeFailed' || 
+        op.phase === 'InstallPlanFailed' || 
+        op.phase === 'Unknown' ||
+        op.phase === 'Pending'
+      );
+      color = 'text-red-500';
+      borderClass = 'hover:border-red-600/50';
+      break;
+    case 'overloaded':
+      title = '🔥 Overloaded (High Restarts)';
+      desc = 'Controller pods that are crash-looping or hitting OOMKilled limits.';
+      ops = currentOperatorData.filter(op => (op.restarts && op.restarts > 5) || op.oom_killed);
+      color = 'text-pink-400';
+      borderClass = 'hover:border-pink-500/50';
+      break;
+    case 'pending':
+      title = '⏳ Pending Manual Approval';
+      desc = 'Operators with an InstallPlan waiting for an admin to approve the update.';
+      ops = currentOperatorData.filter(op => op.approval_status === 'RequiresApproval');
+      color = 'text-cyan-400';
+      borderClass = 'hover:border-cyan-500/50';
+      break;
+    case 'orphaned':
+      title = '👻 Orphaned Custom Resources';
+      desc = 'Custom Resources still running on the cluster after their parent operator was deleted.';
+      ops = currentOperatorData.filter(op => op.has_orphans);
+      color = 'text-stone-400';
+      borderClass = 'hover:border-stone-500/50';
+      break;
   }
 
   titleEl.className = `text-xl font-bold mb-2 flex items-center gap-2 ${color}`;
@@ -180,11 +272,18 @@ function openMetricModal(type) {
       const upgradeArrow = op.can_upgrade 
         ? `<span class="opacity-50">➔</span> <span class="font-bold">${op.target_version || 'Target'}</span>` 
         : '';
-        
+
+      const isMajor = (type === 'major');
+      const clickHandler = isMajor ? `onclick="closeMetricModal(); renderCRDDiffModal('${op.name || op.package}')"` : '';
+      const cursorStyle = isMajor ? 'cursor-pointer hover:border-amber-500/80 hover:bg-gray-900/80' : 'cursor-default';
+
       return `
-      <li class="bg-gray-950 border border-gray-800 p-4 rounded flex justify-between items-center transition cursor-default ${borderClass}">
+      <li ${clickHandler} class="bg-gray-950 border border-gray-800 p-4 rounded flex justify-between items-center transition ${cursorStyle} ${borderClass}">
         <div>
-          <span class="font-bold text-gray-200 block text-base">${op.name || op.package}</span>
+          <span class="font-bold text-gray-200 block text-base flex items-center gap-2">
+            ${op.name || op.package}
+            ${isMajor ? '<span class="text-xs text-amber-400 font-normal underline ml-2">Inspect CRD Diff ➔</span>' : ''}
+          </span>
           <span class="text-xs text-gray-500 font-mono mt-1 block">Namespace: ${op.namespace}</span>
         </div>
         <div class="text-xs font-mono bg-gray-900 px-3 py-1.5 rounded border border-gray-800 flex items-center gap-2 ${color}">
@@ -307,6 +406,12 @@ function renderGrid(operators) {
     const targetCSVDisplay = op.target_csv || op.installedCSV || 'N/A';
     const crds = op.crds || [];
 
+    let calculatedTotalCRs = 0;
+    if (crds.length > 0) {
+      calculatedTotalCRs = crds.reduce((sum, crd) => sum + (crd.active_count || 0), 0);
+    }
+    const finalActiveCRs = op.active_crs !== undefined ? op.active_crs : calculatedTotalCRs;
+
     let badges = [];
 
     if (op.is_idle) {
@@ -329,6 +434,34 @@ function renderGrid(operators) {
     let projectionHTML = '';
 
     if (op.can_upgrade) {
+      let breakingWarning = '';
+
+      if (op.crd_diff && op.crd_diff.has_breaking_impact && op.crd_diff.violating_crs && op.crd_diff.violating_crs.length > 0) {
+        breakingWarning = `
+          <div class="mt-3 bg-red-950/60 border border-red-800 p-3 rounded">
+            <div class="text-xs font-bold text-red-400 flex items-center justify-between mb-1">
+              <span>🚨 CRD Schema Breaking Change Impact</span>
+              <span class="bg-red-900 text-red-200 px-2 py-0.5 rounded text-[10px]">${op.crd_diff.violating_crs.length} Active CRs Affected</span>
+            </div>
+            <div class="space-y-1 mt-2">
+              ${op.crd_diff.violating_crs.map(v => `
+                <div class="text-xs text-red-300 flex justify-between font-mono bg-gray-950 p-1.5 rounded border border-red-900/40">
+                  <span>CR: <strong>${v.cr_name}</strong> (${v.crd_kind})</span>
+                  <span class="text-amber-400">${v.breaking_field}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      } else {
+        breakingWarning = `
+          <div class="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-900/50 p-2.5 rounded flex items-start gap-2 mt-3">
+            <span class="font-bold">✓ Safe Target Projection:</span>
+            <span>No active Custom Resources will be impacted by field removals or breaking schema changes in <strong>v${targetVerDisplay}</strong>.</span>
+          </div>
+        `;
+      }
+
       projectionHTML = `
         <div class="mt-4 pt-4 border-t border-gray-800/80 bg-gray-950/50 -mx-5 -mb-5 p-5">
           <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Upgrade Projection Analysis</div>
@@ -342,10 +475,7 @@ function renderGrid(operators) {
               <span class="text-emerald-400 font-mono">${targetCSVDisplay}</span>
             </div>
           </div>
-          <div class="text-xs text-amber-400 bg-amber-950/40 border border-amber-900/50 p-2.5 rounded flex items-start gap-2">
-            <span class="font-bold">⚠️ Recommendation:</span>
-            <span>Proceeding with a <strong>${op.upgrade_type}</strong> upgrade from ${currentVerDisplay} to v${targetVerDisplay}. CRD schema breaking changes are possible. Proceed with caution.</span>
-          </div>
+          ${breakingWarning}
         </div>
       `;
     }
@@ -383,7 +513,7 @@ function renderGrid(operators) {
             Channel: <span class="text-gray-300 font-mono">${op.channel}</span> | 
             Status: <span class="${op.phase === 'Succeeded' ? 'text-emerald-400' : 'text-amber-400'} font-bold">${op.phase}</span> | 
             CRDs: <span class="text-blue-400 font-bold">${crds.length}</span> | 
-            Active CRs: <span class="${op.active_crs === 0 ? 'text-red-400' : 'text-emerald-400'} font-bold">${op.active_crs}</span>
+            Active CRs: <span class="${finalActiveCRs === 0 ? 'text-red-400' : 'text-emerald-400'} font-bold">${finalActiveCRs}</span>
           </p>
         </div>
         <div class="text-right">

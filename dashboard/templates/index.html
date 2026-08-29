@@ -20,13 +20,35 @@
     </div>
     
     <div class="flex flex-col items-end gap-2">
-      <div class="flex gap-3">
+      <div class="flex items-center gap-3">
+        <!-- Refresh Controls -->
+        <div class="flex items-center gap-2 bg-gray-900 border border-gray-800 px-3 py-1.5 rounded shadow">
+          <div class="relative w-5 h-5 flex items-center justify-center">
+            <svg class="w-full h-full transform -rotate-90" viewBox="0 0 24 24">
+              <circle class="text-gray-800" stroke-width="2" stroke="currentColor" fill="transparent" r="10" cx="12" cy="12" />
+              <circle id="timerProgress" class="text-blue-500 transition-all duration-1000 ease-linear" stroke-width="2" stroke-dasharray="62.83" stroke-dashoffset="0" stroke="currentColor" fill="transparent" r="10" cx="12" cy="12" />
+            </svg>
+            <span id="refreshTimerText" class="absolute text-[8px] font-bold text-gray-300">60s</span>
+          </div>
+          
+          <select id="refreshInterval" onchange="updateRefreshInterval()" class="bg-gray-950 border border-gray-700 text-gray-300 text-xs rounded focus:ring-blue-500 focus:border-blue-500 block p-1">
+            <option value="15">15 sec</option>
+            <option value="30">30 sec</option>
+            <option value="60" selected>1 min</option>
+            <option value="300">5 min</option>
+            <option value="0">Off</option>
+          </select>
+        </div>
+
         <button onclick="downloadReport()" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-2 rounded shadow transition text-sm font-medium flex items-center gap-2 border border-gray-700">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
           Export Report
         </button>
         <a href="/features" class="bg-blue-900/50 hover:bg-blue-800/60 border border-blue-700/50 text-blue-300 px-4 py-2 rounded shadow transition text-sm font-medium">
           Roadmap
+        </a>
+        <a href="/help" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-2 rounded shadow transition text-sm font-medium border border-gray-700">
+          Help
         </a>
         <a href="/logout" class="bg-red-900/50 hover:bg-red-800/60 border border-red-700/50 text-red-300 px-4 py-2 rounded shadow transition text-sm font-medium">
           Logout
@@ -40,9 +62,7 @@
     </div>
   </header>
 
-  <!-- ========================================== -->
-  <!-- GROUPED METRIC SECTIONS                    -->
-  <!-- ========================================== -->
+  <!-- Interactive Metric Grid -->
   <div class="space-y-6 mb-8">
 
     <!-- 1. Lifecycle & Upgrades Section -->
@@ -50,24 +70,43 @@
       <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 border-b border-gray-800 pb-2">Lifecycle & Upgrades</h3>
       <div class="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <!-- Up to Date -->
-        <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-emerald-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('uptodate')">
+        <div class="bg-gray-900 border border-gray-800 p-5 rounded-lg shadow cursor-pointer hover:border-emerald-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('uptodate')">
           <div class="text-3xl font-bold text-white mb-1 group-hover:text-emerald-400 transition" id="metricUpToDate">0</div>
-          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Up to Date</div>
+          <div class="flex items-center gap-1.5 text-sm font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">
+            <span>Up to Date</span>
+            <svg class="w-4 h-4 text-emerald-500 opacity-70 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+          </div>
+          <div class="text-xs text-gray-500 mt-2">Click to view aligned</div>
         </div>
+
         <!-- Updates Pending -->
-        <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-amber-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('upgradeable')">
+        <div class="bg-gray-900 border border-gray-800 p-5 rounded-lg shadow cursor-pointer hover:border-amber-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('upgradeable')">
           <div class="text-3xl font-bold text-white mb-1 group-hover:text-amber-400 transition" id="metricUpgradeable">0</div>
-          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Updates Pending</div>
+          <div class="flex items-center gap-1.5 text-sm font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">
+            <span>Updates Pending</span>
+            <svg class="w-4 h-4 text-amber-500 opacity-70 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+          </div>
+          <div class="text-xs text-gray-500 mt-2">Click to view available</div>
         </div>
+
         <!-- Pending Approval -->
-        <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-cyan-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('pending')">
+        <div class="bg-gray-900 border border-gray-800 p-5 rounded-lg shadow cursor-pointer hover:border-cyan-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('pending')">
           <div class="text-3xl font-bold text-white mb-1 group-hover:text-cyan-400 transition" id="metricPending">0</div>
-          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Pending Approval</div>
+          <div class="flex items-center gap-1.5 text-sm font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">
+            <span>Pending Approval</span>
+            <svg class="w-4 h-4 text-cyan-500 opacity-70 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+          </div>
+          <div class="text-xs text-gray-500 mt-2">Click to view pending</div>
         </div>
+
         <!-- Major Risks -->
-        <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-orange-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('major')">
-          <div class="text-3xl font-bold text-white mb-1 group-hover:text-orange-400 transition" id="metricMajorRisk">0</div>
-          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Major Risks</div>
+        <div class="bg-gray-900 border border-gray-800 p-5 rounded-lg shadow cursor-pointer hover:border-red-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('major')">
+          <div class="text-3xl font-bold text-white mb-1 group-hover:text-red-400 transition" id="metricMajorRisk">0</div>
+          <div class="flex items-center gap-1.5 text-sm font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">
+            <span>Major Risks</span>
+            <svg class="w-4 h-4 text-red-500 opacity-70 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+          </div>
+          <div class="text-xs text-gray-500 mt-2">Click to view risks</div>
         </div>
       </div>
     </section>
@@ -75,26 +114,55 @@
     <!-- 2. Health & Deep Analysis Section -->
     <section>
       <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 border-b border-gray-800 pb-2">Health & Deep Analysis</h3>
-      <div class="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      <div class="grid grid-cols-2 xl:grid-cols-5 gap-4">
         <!-- Degraded / Failed -->
-        <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-red-600/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('degraded')">
+        <div class="bg-gray-900 border border-gray-800 p-5 rounded-lg shadow cursor-pointer hover:border-red-600/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('degraded')">
           <div class="text-3xl font-bold text-white mb-1 group-hover:text-red-500 transition" id="metricDegraded">0</div>
-          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Degraded / Failed</div>
+          <div class="flex items-center gap-1.5 text-sm font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">
+            <span>Degraded</span>
+            <svg class="w-4 h-4 text-red-600 opacity-70 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+          </div>
+          <div class="text-xs text-gray-500 mt-2">Click to view degraded</div>
         </div>
+
         <!-- Overloaded -->
-        <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-pink-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('overloaded')">
+        <div class="bg-gray-900 border border-gray-800 p-5 rounded-lg shadow cursor-pointer hover:border-pink-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('overloaded')">
           <div class="text-3xl font-bold text-white mb-1 group-hover:text-pink-400 transition" id="metricOverloaded">0</div>
-          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Overloaded (Restarts)</div>
+          <div class="flex items-center gap-1.5 text-sm font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">
+            <span>Overloaded</span>
+            <svg class="w-4 h-4 text-pink-500 opacity-70 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+          </div>
+          <div class="text-xs text-gray-500 mt-2">Click to view restarts</div>
         </div>
+
         <!-- Conflicts -->
-        <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-red-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('conflict')">
+        <div class="bg-gray-900 border border-gray-800 p-5 rounded-lg shadow cursor-pointer hover:border-red-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('conflict')">
           <div class="text-3xl font-bold text-white mb-1 group-hover:text-red-400 transition" id="metricConflict">0</div>
-          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Conflicts (Duplicates)</div>
+          <div class="flex items-center gap-1.5 text-sm font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">
+            <span>Conflicts</span>
+            <svg class="w-4 h-4 text-red-500 opacity-70 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+          </div>
+          <div class="text-xs text-gray-500 mt-2">Click to view duplicates</div>
         </div>
+
         <!-- Orphaned CRs -->
-        <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-stone-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('orphaned')">
+        <div class="bg-gray-900 border border-gray-800 p-5 rounded-lg shadow cursor-pointer hover:border-stone-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('orphaned')">
           <div class="text-3xl font-bold text-white mb-1 group-hover:text-stone-400 transition" id="metricOrphaned">0</div>
-          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Orphaned CRs</div>
+          <div class="flex items-center gap-1.5 text-sm font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">
+            <span>Orphaned CRs</span>
+            <svg class="w-4 h-4 text-stone-500 opacity-70 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+          </div>
+          <div class="text-xs text-gray-500 mt-2">Click to view orphans</div>
+        </div>
+
+        <!-- External Routes -->
+        <div class="bg-gray-900 border border-gray-800 p-5 rounded-lg shadow cursor-pointer hover:border-blue-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('routes')">
+          <div class="text-3xl font-bold text-white mb-1 group-hover:text-blue-400 transition" id="metricRoutes">0</div>
+          <div class="flex items-center gap-1.5 text-sm font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">
+            <span>External Routes</span>
+            <svg class="w-4 h-4 text-blue-500 opacity-70 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+          </div>
+          <div class="text-xs text-gray-500 mt-2">Click to view exposed ingress</div>
         </div>
       </div>
     </section>
@@ -103,21 +171,29 @@
     <section>
       <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 border-b border-gray-800 pb-2">Utilization & General Status</h3>
       <div class="grid grid-cols-2 xl:grid-cols-2 gap-4">
-        <!-- Total Subs -->
-        <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-blue-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('total')">
+        <!-- Total -->
+        <div class="bg-gray-900 border border-gray-800 p-5 rounded-lg shadow cursor-pointer hover:border-blue-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('total')">
           <div class="text-3xl font-bold text-white mb-1 group-hover:text-blue-400 transition" id="metricTotal">0</div>
-          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Total Subscriptions</div>
+          <div class="flex items-center gap-1.5 text-sm font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">
+            <span>Total Subs</span>
+            <svg class="w-4 h-4 text-blue-500 opacity-70 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+          </div>
+          <div class="text-xs text-gray-500 mt-2">Click to view all</div>
         </div>
-        <!-- Idle -->
-        <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-purple-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('idle')">
+
+        <!-- Idle / 0 CRs -->
+        <div class="bg-gray-900 border border-gray-800 p-5 rounded-lg shadow cursor-pointer hover:border-purple-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('idle')">
           <div class="text-3xl font-bold text-white mb-1 group-hover:text-purple-400 transition" id="metricIdle">0</div>
-          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Idle (0 Active CRs)</div>
+          <div class="flex items-center gap-1.5 text-sm font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">
+            <span>Idle / 0 CRs</span>
+            <svg class="w-4 h-4 text-purple-500 opacity-70 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+          </div>
+          <div class="text-xs text-gray-500 mt-2">Click to view unused</div>
         </div>
       </div>
     </section>
 
   </div>
-  <!-- ========================================== -->
 
   <!-- Charts Section -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -131,25 +207,6 @@
     <div class="md:col-span-2 bg-gray-900 border border-gray-800 p-5 rounded-lg shadow flex flex-col justify-between">
       <div class="flex justify-between items-center mb-4">
         <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Channel Distribution</h3>
-        
-        <!-- Refresh Controls -->
-        <div class="flex items-center gap-3">
-          <div class="relative w-6 h-6 flex items-center justify-center">
-            <svg class="w-full h-full transform -rotate-90" viewBox="0 0 24 24">
-              <circle class="text-gray-800" stroke-width="2" stroke="currentColor" fill="transparent" r="10" cx="12" cy="12" />
-              <circle id="timerProgress" class="text-blue-500 transition-all duration-1000 ease-linear" stroke-width="2" stroke-dasharray="62.83" stroke-dashoffset="0" stroke="currentColor" fill="transparent" r="10" cx="12" cy="12" />
-            </svg>
-            <span id="refreshTimerText" class="absolute text-[8px] font-bold text-gray-300">60s</span>
-          </div>
-          
-          <select id="refreshInterval" onchange="updateRefreshInterval()" class="bg-gray-950 border border-gray-700 text-gray-300 text-xs rounded focus:ring-blue-500 focus:border-blue-500 block p-1.5">
-            <option value="15">15 sec</option>
-            <option value="30">30 sec</option>
-            <option value="60" selected>1 min</option>
-            <option value="300">5 min</option>
-            <option value="0">Off</option>
-          </select>
-        </div>
       </div>
       <div class="h-48 relative w-full">
         <canvas id="channelChart"></canvas>
@@ -190,7 +247,31 @@
     </div>
   </div>
 
+  <!-- Dedicated CRD Schema Evolution & Flow Modal -->
+  <div id="crdDiffModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden justify-center items-center z-[60] p-4 transition-all">
+    <div class="bg-gray-900 border border-gray-800 rounded-xl max-w-4xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+      
+      <!-- Modal Header -->
+      <div class="flex justify-between items-center pb-4 border-b border-gray-800 mb-6">
+        <div id="crdDiffTitle"></div>
+        <button onclick="closeCRDDiffModal()" class="text-gray-400 hover:text-white transition text-xl font-bold px-2 py-1">✕</button>
+      </div>
+
+      <!-- Visual Sankey Flow Container -->
+      <div id="crdFlowContainer"></div>
+
+      <!-- Spec-Field Comparison Section -->
+      <div class="mt-4">
+        <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Spec Field Schema Comparison Analysis</h4>
+        <div id="crdComparisonTable"></div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- Connect external JavaScript logic -->
-  <script src="/static/app.js"></script>
+  <script src="/static/crd_diff_viewer.js?v=2.0.0"></script>
+  <script src="/static/app.js?v=2.0.5"></script>
+  
 </body>
 </html>

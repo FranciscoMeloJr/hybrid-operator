@@ -1,32 +1,258 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Help - OLM Governance Console</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hybrid Operator - Help & Documentation Center</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/styles.css">
 </head>
-<body class="page-wrapper">
-    
-    <header class="console-header">
-        <div class="flex items-center gap-4">
-            <img src="/static/logo.png" alt="Apotheosis Logo" class="h-10 w-auto object-contain">
-            <h1 class="text-xl font-bold text-white">Help & Documentation</h1>
-        </div>
-        <a href="/" class="btn btn-secondary">&larr; Back to Dashboard</a>
-    </header>
+<body class="bg-gray-950 text-gray-200 antialiased min-h-screen p-6 font-sans">
 
-    <div class="bg-[#161b22] border border-[#30363d] rounded-lg p-6 mt-6 shadow-sm">
-        <h3 class="text-lg font-bold text-white mb-2">How to use the Console</h3>
-        <p style="color: var(--text-muted)" class="mb-4">
-            This console connects to the Hybrid Operator Sensor to provide real-time metrics, CRD mappings, and upgrade projections for all operators in your cluster.
-        </p>
-        <ul class="list-disc pl-5" style="color: var(--text-muted)">
-            <li class="mb-2"><strong>Refresh Data:</strong> Pulls the latest state directly from the Kubernetes API via the Go engine.</li>
-            <li class="mb-2"><strong>Upgrade Projection:</strong> Automatically evaluates if current Custom Resources are compatible with newer Operator versions.</li>
-        </ul>
+  <!-- Top Console Header -->
+  <header class="border-b border-gray-800 pb-4 mb-6 flex justify-between items-center">
+    <div class="flex items-center gap-4">
+      <img src="/static/logo.png" alt="Apotheosis Logo" class="h-10 w-auto object-contain">
+      <div class="flex items-center gap-3">
+        <h1 class="text-xl font-bold text-white">Hybrid Operator Console</h1>
+        <span class="bg-blue-950 border border-blue-800 text-blue-300 text-[10px] px-2 py-0.5 rounded font-mono font-semibold">v2.0.0</span>
+        <span class="bg-amber-950 border border-amber-800 text-amber-300 text-[10px] px-2 py-0.5 rounded font-mono font-bold uppercase">BETA</span>
+      </div>
     </div>
+    
+    <div class="flex items-center gap-3">
+      <a href="/" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-2 rounded shadow transition text-sm font-medium border border-gray-700 flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+        Back to Console
+      </a>
+    </div>
+  </header>
+
+  <!-- Top Hero Jump Cards (4 Columns) -->
+  <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+    
+    <!-- 1. Core Concepts -->
+    <a href="#core-concepts" class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow hover:border-blue-500/50 hover:bg-gray-850 transition flex justify-between items-center group">
+      <div>
+        <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Getting Started</div>
+        <div class="text-base font-bold text-white group-hover:text-blue-400 transition">Core Concepts</div>
+      </div>
+      <div class="p-2.5 bg-blue-950/50 border border-blue-800/50 rounded-lg text-blue-400">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+      </div>
+    </a>
+
+    <!-- 2. Governance Linter -->
+    <a href="#governance-linter" class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow hover:border-amber-500/50 hover:bg-gray-850 transition flex justify-between items-center group">
+      <div>
+        <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Troubleshooting</div>
+        <div class="text-base font-bold text-white group-hover:text-amber-400 transition">Governance Linter</div>
+      </div>
+      <div class="p-2.5 bg-amber-950/50 border border-amber-800/50 rounded-lg text-amber-400">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+      </div>
+    </a>
+
+    <!-- 3. Autonomous Remediation -->
+    <a href="#remediation" class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow hover:border-emerald-500/50 hover:bg-gray-850 transition flex justify-between items-center group">
+      <div>
+        <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Execution</div>
+        <div class="text-base font-bold text-white group-hover:text-emerald-400 transition">Autonomous Remediation</div>
+      </div>
+      <div class="p-2.5 bg-emerald-950/50 border border-emerald-800/50 rounded-lg text-emerald-400">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+      </div>
+    </a>
+
+    <!-- 4. Universal Metrics -->
+    <a href="#metrics" class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow hover:border-purple-500/50 hover:bg-gray-850 transition flex justify-between items-center group">
+      <div>
+        <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Visualization</div>
+        <div class="text-base font-bold text-white group-hover:text-purple-400 transition">Universal Metrics</div>
+      </div>
+      <div class="p-2.5 bg-purple-950/50 border border-purple-800/50 rounded-lg text-purple-400">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+      </div>
+    </a>
+
+  </div>
+
+  <!-- Content Split Grid (Sidebar + Main Documentation) -->
+  <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+    
+    <!-- Sidebar (1 Column) -->
+    <div class="space-y-6">
+      
+      <!-- Navigation Guide -->
+      <div class="bg-gray-900 border border-gray-800 p-5 rounded-lg shadow">
+        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+          <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          Navigation Guide
+        </h3>
+        <ul class="space-y-2.5 text-xs text-gray-400 font-medium">
+          <li><a href="#core-concepts" class="hover:text-white transition flex items-center gap-2"><span>›</span> Core Concepts</a></li>
+          <li><a href="#governance-linter" class="hover:text-white transition flex items-center gap-2"><span>›</span> Governance & Conflict Linter</a></li>
+          <li><a href="#remediation" class="hover:text-white transition flex items-center gap-2"><span>›</span> Operator Actions & Remediation</a></li>
+          <li><a href="#metrics" class="hover:text-white transition flex items-center gap-2"><span>›</span> Advanced & BETA Features</a></li>
+          <li><a href="#apotheosis-team" class="hover:text-white transition flex items-center gap-2"><span>›</span> The Apotheosis Team</a></li>
+        </ul>
+      </div>
+
+      <!-- Pro Tip Box -->
+      <div class="bg-blue-950/30 border border-blue-800/40 p-5 rounded-lg shadow">
+        <h4 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          Pro Tip
+        </h4>
+        <p class="text-xs text-gray-300 leading-relaxed">
+          You can click on any metric card in the top grid to open the <strong class="text-white">Universal Operator Modal</strong>. It filters cluster operator subscriptions live and allows you to download JSON lifecycle governance reports instantly.
+        </p>
+      </div>
+
+    </div>
+
+    <!-- Main Content Area (3 Columns) -->
+    <div class="lg:col-span-3 space-y-8">
+
+      <!-- Section 1: Core Concepts -->
+      <section id="core-concepts" class="bg-gray-900 border border-gray-800 p-6 rounded-lg shadow">
+        <h2 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+          <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+          System Architecture & Core Concepts
+        </h2>
+        <p class="text-sm text-gray-400 mb-6 leading-relaxed">
+          Hybrid Operator isolates operational responsibilities between a cluster-native Go Operator[cite: 1] and an analytical Python Brain[cite: 1].
+        </p>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-gray-950 border border-gray-800 p-4 rounded-lg">
+            <h4 class="font-bold text-white text-sm mb-1">Cluster Go Sensor</h4>
+            <p class="text-xs text-gray-400 leading-relaxed">Runs directly inside OpenShift to stream lightweight telemetry, CSV phases, owned CRDs, and active CR counts[cite: 1].</p>
+          </div>
+          <div class="bg-gray-950 border border-gray-800 p-4 rounded-lg">
+            <h4 class="font-bold text-white text-sm mb-1">Python Analytical Brain</h4>
+            <p class="text-xs text-gray-400 leading-relaxed">Executes heavy upgrade projections, schema breaking-change analysis, and multi-variable scoring off the reconcile loop[cite: 1].</p>
+          </div>
+          <div class="bg-gray-950 border border-gray-800 p-4 rounded-lg">
+            <h4 class="font-bold text-white text-sm mb-1">Remediation Engine</h4>
+            <p class="text-xs text-gray-400 leading-relaxed">Enforces direct cluster actions, automatic namespace cleanup, and conflict resolution across subscriptions[cite: 1].</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 2: Governance & Conflict Linter -->
+      <section id="governance-linter" class="bg-gray-900 border border-gray-800 p-6 rounded-lg shadow">
+        <h2 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+          <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+          Cluster Governance & Telemetry Linter
+        </h2>
+        <p class="text-sm text-gray-400 mb-6 leading-relaxed">
+          The Go telemetry sensor actively monitors cluster state to catch OLM paradoxes, resource limits, and duplicate deployments before they cause outages.
+        </p>
+
+        <div class="space-y-3">
+          <div class="bg-gray-950 border border-red-900/50 p-4 rounded-lg flex items-start gap-3">
+            <div class="p-2 bg-red-950 text-red-400 rounded border border-red-800 shrink-0">🚨</div>
+            <div>
+              <h4 class="font-bold text-red-300 text-sm">Cross-Namespace Conflicts (OLM Split-Brain)</h4>
+              <p class="text-xs text-gray-400 mt-0.5">Detects duplicate operator packages installed globally in <code class="text-gray-300 font-mono">openshift-operators</code> and locally in a user namespace (e.g., duplicate Data Grid instances), preventing API thrashing.</p>
+            </div>
+          </div>
+
+          <div class="bg-gray-950 border border-pink-900/50 p-4 rounded-lg flex items-start gap-3">
+            <div class="p-2 bg-pink-950 text-pink-400 rounded border border-pink-800 shrink-0">🔥</div>
+            <div>
+              <h4 class="font-bold text-pink-300 text-sm">Overloaded Controller Pods</h4>
+              <p class="text-xs text-gray-400 mt-0.5">Flags operator pods experiencing high container restart counts (> 5 in 24h) or frequent <code class="text-gray-300 font-mono">OOMKilled</code> terminations.</p>
+            </div>
+          </div>
+
+          <div class="bg-gray-950 border border-cyan-900/50 p-4 rounded-lg flex items-start gap-3">
+            <div class="p-2 bg-cyan-950 text-cyan-400 rounded border border-cyan-800 shrink-0">⏳</div>
+            <div>
+              <h4 class="font-bold text-cyan-300 text-sm">Pending Manual Approvals</h4>
+              <p class="text-xs text-gray-400 mt-0.5">Tracks manual <code class="text-gray-300 font-mono">InstallPlan</code> updates waiting for cluster admin approval during maintenance windows.</p>
+            </div>
+          </div>
+
+          <div class="bg-gray-950 border border-stone-800 p-4 rounded-lg flex items-start gap-3">
+            <div class="p-2 bg-stone-900 text-stone-400 rounded border border-stone-700 shrink-0">👻</div>
+            <div>
+              <h4 class="font-bold text-stone-300 text-sm">Orphaned Custom Resources</h4>
+              <p class="text-xs text-gray-400 mt-0.5">Identifies active Custom Resources running on the cluster after their parent operator subscription has been deleted.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 3: Remediation & Operator Actions -->
+      <section id="remediation" class="bg-gray-900 border border-gray-800 p-6 rounded-lg shadow">
+        <h2 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+          <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          Remediation & Operator Actions
+        </h2>
+        <p class="text-sm text-gray-400 mb-6 leading-relaxed">
+          Hybrid Operator provides direct cluster-side enforcement capabilities to resolve detected violations automatically or on-demand.
+        </p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="bg-gray-950 border border-gray-800 p-4 rounded-lg">
+            <h4 class="font-bold text-white text-sm mb-1">Conflict Resolution</h4>
+            <p class="text-xs text-gray-400 leading-relaxed">Automatically identifies and safely removes local duplicate Subscriptions causing CSV reconciliation deadlocks.</p>
+          </div>
+          <div class="bg-gray-950 border border-gray-800 p-4 rounded-lg">
+            <h4 class="font-bold text-white text-sm mb-1">Export Governance Reports</h4>
+            <p class="text-xs text-gray-400 leading-relaxed">Generates signed JSON audit reports containing full cluster operator inventory, CRD counts, and upgrade risk vectors.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 4: Advanced & BETA Features -->
+      <section id="metrics" class="bg-gray-900 border border-gray-800 p-6 rounded-lg shadow">
+        <h2 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+          <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+          Advanced & BETA Roadmap Features
+        </h2>
+        <p class="text-sm text-gray-400 mb-6 leading-relaxed">
+          Hybrid Operator is continuously evolving. The following features represent current capabilities and active roadmap items:
+        </p>
+
+        <div class="space-y-3 text-xs">
+          <div class="bg-gray-950 border border-gray-800 p-3.5 rounded flex justify-between items-center">
+            <div>
+              <span class="font-bold text-white block">CRD Schema Diff Engine</span>
+              <span class="text-gray-400">Compares OpenAPI schemas across CSV target versions to highlight breaking field removals before upgrading.</span>
+            </div>
+            <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 px-2 py-0.5 rounded font-mono font-semibold">Active</span>
+          </div>
+
+          <div class="bg-gray-950 border border-gray-800 p-3.5 rounded flex justify-between items-center">
+            <div>
+              <span class="font-bold text-white block">Automatic Resource Tuning</span>
+              <span class="text-gray-400">Generates precise CPU/Memory limit patches for overloaded operator deployments.</span>
+            </div>
+            <span class="bg-amber-950 border border-amber-800 text-amber-300 px-2 py-0.5 rounded font-mono font-semibold">Roadmap</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 5: The Apotheosis Team -->
+      <section id="apotheosis-team" class="bg-gray-900 border border-gray-800 p-6 rounded-lg shadow">
+        <h2 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+          <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+          About the Apotheosis Team
+        </h2>
+        <p class="text-sm text-gray-300 leading-relaxed mb-4">
+          The OpenShift Apotheosis team is a specialized engineering task force dedicated to Digital Ascension and operator lifecycle excellence within enterprise Kubernetes environments.
+        </p>
+        <p class="text-sm text-gray-400 leading-relaxed">
+          By architecting tools like the Hybrid Operator Framework and the Non-Stop Agent Automator (NSAA), the CAP team Customer Engineering Program's mission is to eliminate deployment friction, visualize hidden catalog paradoxes, and empower developers to seamlessly build, test, and release OpenShift operators safely and efficiently.
+        </p>
+      </section>
+
+    </div>
+
+  </div>
 
 </body>
 </html>
