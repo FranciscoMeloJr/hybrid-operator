@@ -92,6 +92,9 @@ type OperatorInfo struct {
     CatalogSource    string              `json:"catalog_source"`
     ServiceAccounts  []string            `json:"service_accounts"`
     Components       []OperatorComponent `json:"components"`
+    TopologyGraph    []TopologyNode      `json:"topology_graph"`
+    EstDowntime      string              `json:"est_downtime"`
+    RiskScore        int                 `json:"risk_score"`
 }
 
 type ClusterGovernanceResponse struct {
@@ -284,6 +287,9 @@ func GetClusterGovernance(ctx context.Context, dynClient dynamic.Interface) (Clu
             ExposedRoutes:    []string{},
             ServiceAccounts:  []string{},
             Components:       []OperatorComponent{},
+            TopologyGraph:    []TopologyNode{},
+            EstDowntime:      "0m",
+            RiskScore:        0,
         }
 
         if installedCSV != "" {
@@ -448,6 +454,11 @@ func GetClusterGovernance(ctx context.Context, dynClient dynamic.Interface) (Clu
                 }
             }
         }
+
+        // Inject Predictive Intelligence & Topology Graph
+        op.TopologyGraph = BuildDependencyGraph(op)
+        op.EstDowntime = EstimateMaintenanceWindow(op, 3) // Assuming 3 worker node baseline
+        op.RiskScore = CalculateSecurityRiskScore(op)
 
         results = append(results, op)
     }

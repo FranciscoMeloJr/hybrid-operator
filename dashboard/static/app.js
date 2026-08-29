@@ -385,6 +385,7 @@ function renderCharts(operators) {
   }
 }
 
+// Replace your existing renderGrid function with this exact block
 function renderGrid(operators) {
   const grid = document.getElementById('operatorGrid');
   if (!grid) return;
@@ -462,9 +463,27 @@ function renderGrid(operators) {
         `;
       }
 
+      let remediationButton = '';
+      if (op.is_idle) {
+        remediationButton = `
+          <button onclick="event.stopPropagation(); triggerRemediation('PURGE_IDLE_SUBSCRIPTION', '${op.namespace}', '${op.name || op.package}')" class="mt-3 bg-purple-900/60 hover:bg-purple-800 border border-purple-700 text-purple-200 px-3 py-1.5 rounded text-xs font-mono font-bold transition flex items-center gap-1.5 w-full justify-center">
+            ⚡ Autonomous Reclaim: Purge Idle Subscription
+          </button>
+        `;
+      } else if (op.phase === 'Failed') {
+        remediationButton = `
+          <button onclick="event.stopPropagation(); triggerRemediation('REAPPROVE_INSTALLPLAN', '${op.namespace}', '${op.name || op.package}')" class="mt-3 bg-red-900/60 hover:bg-red-800 border border-red-700 text-red-200 px-3 py-1.5 rounded text-xs font-mono font-bold transition flex items-center gap-1.5 w-full justify-center">
+            🛠️ Autonomous Healing: Clear Stuck InstallPlan
+          </button>
+        `;
+      }
+
       projectionHTML = `
         <div class="mt-4 pt-4 border-t border-gray-800/80 bg-gray-950/50 -mx-5 -mb-5 p-5">
-          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Upgrade Projection Analysis</div>
+          <div class="flex justify-between items-center mb-2">
+             <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Upgrade Projection Analysis</div>
+             <div class="text-[10px] font-mono bg-gray-900 px-2 py-0.5 rounded text-gray-400 border border-gray-700">Risk Score: <span class="${op.risk_score > 30 ? 'text-amber-400' : 'text-emerald-400'}">${op.risk_score || 0}/100</span> | ${op.est_downtime || '0m'}</div>
+          </div>
           <div class="grid grid-cols-2 gap-4 text-xs mb-3">
             <div>
               <span class="text-gray-500 block mb-0.5">From (Current CSV)</span>
@@ -476,8 +495,35 @@ function renderGrid(operators) {
             </div>
           </div>
           ${breakingWarning}
+          ${remediationButton}
         </div>
       `;
+    } else {
+        let remediationButton = '';
+        if (op.is_idle) {
+            remediationButton = `
+            <button onclick="event.stopPropagation(); triggerRemediation('PURGE_IDLE_SUBSCRIPTION', '${op.namespace}', '${op.name || op.package}')" class="mt-3 bg-purple-900/60 hover:bg-purple-800 border border-purple-700 text-purple-200 px-3 py-1.5 rounded text-xs font-mono font-bold transition flex items-center gap-1.5 w-full justify-center">
+                ⚡ Autonomous Reclaim: Purge Idle Subscription
+            </button>
+            `;
+        } else if (op.phase === 'Failed') {
+            remediationButton = `
+            <button onclick="event.stopPropagation(); triggerRemediation('REAPPROVE_INSTALLPLAN', '${op.namespace}', '${op.name || op.package}')" class="mt-3 bg-red-900/60 hover:bg-red-800 border border-red-700 text-red-200 px-3 py-1.5 rounded text-xs font-mono font-bold transition flex items-center gap-1.5 w-full justify-center">
+                🛠️ Autonomous Healing: Clear Stuck InstallPlan
+            </button>
+            `;
+        }
+        if (remediationButton !== '') {
+            projectionHTML = `
+            <div class="mt-4 pt-4 border-t border-gray-800/80 bg-gray-950/50 -mx-5 -mb-5 p-5">
+                <div class="flex justify-between items-center mb-2">
+                <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Autonomous Actions</div>
+                <div class="text-[10px] font-mono bg-gray-900 px-2 py-0.5 rounded text-gray-400 border border-gray-700">Risk Score: <span class="${op.risk_score > 30 ? 'text-amber-400' : 'text-emerald-400'}">${op.risk_score || 0}/100</span></div>
+                </div>
+                ${remediationButton}
+            </div>
+            `;
+        }
     }
 
     let crdListHTML = crds.length > 0 ? crds.map(crd => `
@@ -543,38 +589,7 @@ function renderGrid(operators) {
   });
 }
 
-function toggleCRDDrawer(drawerId) {
-  const drawer = document.getElementById(drawerId);
-  if (drawer) drawer.classList.toggle('hidden');
-}
-
-function downloadReport() {
-  if (!currentOperatorData || currentOperatorData.length === 0) {
-    alert("No operator data available to export.");
-    return;
-  }
-
-  const report = {
-    title: "OLM Governance & Lifecycle Report",
-    generated_at: new Date().toISOString(),
-    total_operators: currentOperatorData.length,
-    upgradeable_count: currentOperatorData.filter(o => o.can_upgrade).length,
-    idle_count: currentOperatorData.filter(o => o.is_idle).length,
-    operators: currentOperatorData
-  };
-
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(report, null, 2));
-  const downloadAnchor = document.createElement('a');
-  downloadAnchor.setAttribute("href", dataStr);
-  downloadAnchor.setAttribute("download", `olm-governance-report-${new Date().toISOString().slice(0, 10)}.json`);
-  document.body.appendChild(downloadAnchor);
-  downloadAnchor.click();
-  downloadAnchor.remove();
-}
-
-// ============================================================================
-// INSPECT RESOURCES MODAL HANDLER
-// ============================================================================
+// Replace your existing openComponentModal function with this exact block
 function openComponentModal(operatorName) {
   const op = currentOperatorData.find(o => (o.name === operatorName || o.package === operatorName));
   if (!op) return;
@@ -643,5 +658,126 @@ function openComponentModal(operatorName) {
     content.classList.remove('scale-95');
   }, 10);
 }
+
+// Append this function to the bottom of app.js
+async function triggerRemediation(action, namespace, target) {
+  if (!confirm(`Execute autonomous action '${action}' on ${target}?`)) return;
+
+  try {
+    const response = await fetch('/api/v1/remediate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, namespace, target })
+    });
+    const result = await response.json();
+    alert(result.message || "Remediation executed.");
+    if (typeof fetchTargets === 'function') {
+        fetchTargets();
+    }
+  } catch (err) {
+    alert("Failed to execute remediation directive: " + err);
+  }
+}
+
+function toggleCRDDrawer(drawerId) {
+  const drawer = document.getElementById(drawerId);
+  if (drawer) drawer.classList.toggle('hidden');
+}
+
+function downloadReport() {
+  if (!currentOperatorData || currentOperatorData.length === 0) {
+    alert("No operator data available to export.");
+    return;
+  }
+
+  const report = {
+    title: "OLM Governance & Lifecycle Report",
+    generated_at: new Date().toISOString(),
+    total_operators: currentOperatorData.length,
+    upgradeable_count: currentOperatorData.filter(o => o.can_upgrade).length,
+    idle_count: currentOperatorData.filter(o => o.is_idle).length,
+    operators: currentOperatorData
+  };
+
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(report, null, 2));
+  const downloadAnchor = document.createElement('a');
+  downloadAnchor.setAttribute("href", dataStr);
+  downloadAnchor.setAttribute("download", `olm-governance-report-${new Date().toISOString().slice(0, 10)}.json`);
+  document.body.appendChild(downloadAnchor);
+  downloadAnchor.click();
+  downloadAnchor.remove();
+}
+
+// ============================================================================
+// INSPECT RESOURCES MODAL HANDLER
+// ============================================================================
+/* function openComponentModal(operatorName) {
+  const op = currentOperatorData.find(o => (o.name === operatorName || o.package === operatorName));
+  if (!op) return;
+
+  const modal = document.getElementById('unifiedModal');
+  const content = document.getElementById('unifiedModalContent');
+  const titleEl = document.getElementById('unifiedModalTitle');
+  const descEl = document.getElementById('unifiedModalDesc');
+  const listEl = document.getElementById('unifiedModalList');
+
+  if (!modal || !listEl) return;
+
+  titleEl.className = `text-xl font-bold mb-2 flex items-center justify-between text-blue-400`;
+  titleEl.innerHTML = `
+    <div class="flex items-center gap-2">
+      <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+      <span>Infrastructure Resources: ${op.name || op.package}</span>
+    </div>
+    <span class="text-xs font-mono bg-blue-950 border border-blue-800 text-blue-300 px-3 py-1 rounded">
+      Namespace: ${op.namespace}
+    </span>
+  `;
+
+  descEl.textContent = `Active ServiceAccounts, Deployments, Routes, and OLM Subscription metadata detected in namespace ${op.namespace}.`;
+
+  const components = op.components || [];
+
+  let html = `
+    <div class="bg-gray-950 border border-gray-800 p-4 rounded-lg mb-4 grid grid-cols-2 gap-4 font-mono text-xs">
+      <div>
+        <span class="text-gray-500 block mb-0.5">Install Plan Strategy</span>
+        <span class="text-white font-bold">${op.approval_strategy || 'Automatic'}</span>
+      </div>
+      <div>
+        <span class="text-gray-500 block mb-0.5">Catalog Source</span>
+        <span class="text-blue-400 font-bold">${op.catalog_source || 'redhat-operators'}</span>
+      </div>
+    </div>
+  `;
+
+  if (components.length === 0) {
+    html += `<div class="text-gray-500 italic text-sm text-center py-6 bg-gray-950 rounded border border-gray-800">No active infrastructure deployments or components detected.</div>`;
+  } else {
+    html += `
+      <div class="space-y-2">
+        <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Installed Components (${components.length})</div>
+        ${components.map(c => `
+          <div class="bg-gray-950 border border-gray-800 p-3 rounded flex justify-between items-center text-xs font-mono hover:border-gray-700 transition">
+            <div class="flex items-center gap-2">
+              <span class="bg-blue-950 border border-blue-800 text-blue-300 px-2 py-0.5 rounded text-[10px] uppercase font-bold">${c.kind}</span>
+              <span class="text-gray-200 font-bold">${c.name}</span>
+            </div>
+            <span class="text-gray-400">${c.status}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  listEl.innerHTML = html;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  setTimeout(() => {
+    modal.classList.remove('opacity-0');
+    content.classList.remove('scale-95');
+  }, 10);
+} */
 
 document.addEventListener('DOMContentLoaded', fetchTargets);
