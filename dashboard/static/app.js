@@ -385,7 +385,6 @@ function renderCharts(operators) {
   }
 }
 
-// Replace your existing renderGrid function with this exact block
 function renderGrid(operators) {
   const grid = document.getElementById('operatorGrid');
   if (!grid) return;
@@ -553,6 +552,10 @@ function renderGrid(operators) {
             <button onclick="event.stopPropagation(); openComponentModal('${op.name || op.package}')" class="text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 text-blue-400 px-2 py-1 rounded transition font-mono flex items-center gap-1.5">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
               Inspect Resources
+            </button>
+            <button onclick="event.stopPropagation(); openTopologyModal('${op.name || op.package}')" class="text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 text-purple-400 px-2 py-1 rounded transition font-mono flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path></svg>
+              View Topology
             </button>
             <div class="flex gap-2">
               ${badgeHTML}
@@ -779,5 +782,100 @@ function downloadReport() {
     content.classList.remove('scale-95');
   }, 10);
 } */
+
+// ============================================================================
+// TOPOLOGY GRAPH MODAL HANDLER
+// ============================================================================
+function closeTopologyModal(event) {
+  if (event && event.target.id !== 'topologyModal' && event.currentTarget.id !== 'topologyModalCloseBtn') return;
+  const modal = document.getElementById('topologyModal');
+  const content = document.getElementById('topologyModalContent');
+  if (modal) {
+    content.classList.add('scale-95');
+    modal.classList.add('opacity-0');
+    setTimeout(() => {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }, 200);
+  }
+}
+
+function openTopologyModal(operatorName) {
+  const op = currentOperatorData.find(o => (o.name === operatorName || o.package === operatorName));
+  if (!op || !op.topology_graph) return;
+
+  // Dynamically inject the modal if it doesn't exist yet
+  let modal = document.getElementById('topologyModal');
+  if (!modal) {
+    const modalHtml = `
+      <div id="topologyModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden justify-center items-center z-50 p-4 transition-opacity duration-200 opacity-0" onclick="closeTopologyModal(event)">
+        <div id="topologyModalContent" class="bg-gray-900 border border-gray-700 p-6 rounded-lg shadow-2xl w-full max-w-3xl relative transform transition-transform duration-200 scale-95 max-h-[85vh] overflow-y-auto" onclick="event.stopPropagation()">
+          <button id="topologyModalCloseBtn" onclick="closeTopologyModal(event)" class="absolute top-4 right-4 text-gray-500 hover:text-white transition">
+            <svg class="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+          <h3 id="topologyModalTitle" class="text-xl font-bold mb-6 text-white flex items-center gap-2 pb-4 border-b border-gray-800"></h3>
+          <div id="topologyContainer" class="p-2"></div>
+        </div>
+      </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    modal = document.getElementById('topologyModal');
+  }
+
+  const content = document.getElementById('topologyModalContent');
+  const titleEl = document.getElementById('topologyModalTitle');
+  const container = document.getElementById('topologyContainer');
+
+  titleEl.innerHTML = `
+    <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+    <span>Dependency Topology: ${op.name || op.package}</span>
+  `;
+
+  const rootNode = op.topology_graph.find(n => n.type === 'Subscription');
+  
+  if (rootNode) {
+      container.innerHTML = buildTopologyHTML(rootNode.id, op.topology_graph);
+  } else {
+      container.innerHTML = `<div class="text-gray-500 italic text-sm text-center py-6">Topology graph unavailable.</div>`;
+  }
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  setTimeout(() => {
+    modal.classList.remove('opacity-0');
+    content.classList.remove('scale-95');
+  }, 10);
+}
+
+function buildTopologyHTML(nodeId, nodes, depth = 0) {
+  const node = nodes.find(n => n.id === nodeId);
+  if (!node) return '';
+
+  let typeColor = 'text-gray-400';
+  let borderCol = 'border-gray-800';
+  if (node.type === 'Subscription') { typeColor = 'text-purple-400'; borderCol = 'border-purple-800'; }
+  if (node.type === 'CSV') { typeColor = 'text-blue-400'; borderCol = 'border-blue-800'; }
+  if (node.type === 'CRD') { typeColor = 'text-emerald-400'; borderCol = 'border-emerald-800'; }
+
+  let childrenHtml = '';
+  if (node.children && node.children.length > 0) {
+      childrenHtml = `<div class="ml-6 pl-4 border-l-2 border-gray-700/50 space-y-4 mt-4 relative">
+          ${node.children.map(cid => buildTopologyHTML(cid, nodes, depth + 1)).join('')}
+      </div>`;
+  }
+
+  return `
+    <div class="relative w-full">
+        <div class="bg-gray-950 border ${borderCol} p-3 rounded-lg flex justify-between items-center shadow-md transition hover:bg-gray-900 z-10 relative">
+            <div class="flex items-center gap-3">
+                <span class="text-[10px] uppercase font-bold tracking-wider bg-gray-900 px-2 py-0.5 rounded border border-gray-800 ${typeColor}">${node.type}</span>
+                <span class="font-mono text-sm text-gray-200 font-bold">${node.name}</span>
+            </div>
+            <span class="text-xs text-gray-400 font-mono bg-gray-900 px-2 py-1 rounded">${node.status}</span>
+        </div>
+        ${childrenHtml}
+    </div>
+  `;
+}
 
 document.addEventListener('DOMContentLoaded', fetchTargets);
