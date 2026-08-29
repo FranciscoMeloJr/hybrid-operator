@@ -504,6 +504,10 @@ function renderGrid(operators) {
               ${op.name || op.package}
               <svg id="chevron-${index}" class="w-4 h-4 text-gray-500 transition-transform transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </h2>
+            <button onclick="event.stopPropagation(); openComponentModal('${op.name || op.package}')" class="text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 text-blue-400 px-2 py-1 rounded transition font-mono flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+              Inspect Resources
+            </button>
             <div class="flex gap-2">
               ${badgeHTML}
             </div>
@@ -566,6 +570,78 @@ function downloadReport() {
   document.body.appendChild(downloadAnchor);
   downloadAnchor.click();
   downloadAnchor.remove();
+}
+
+// ============================================================================
+// INSPECT RESOURCES MODAL HANDLER
+// ============================================================================
+function openComponentModal(operatorName) {
+  const op = currentOperatorData.find(o => (o.name === operatorName || o.package === operatorName));
+  if (!op) return;
+
+  const modal = document.getElementById('unifiedModal');
+  const content = document.getElementById('unifiedModalContent');
+  const titleEl = document.getElementById('unifiedModalTitle');
+  const descEl = document.getElementById('unifiedModalDesc');
+  const listEl = document.getElementById('unifiedModalList');
+
+  if (!modal || !listEl) return;
+
+  titleEl.className = `text-xl font-bold mb-2 flex items-center justify-between text-blue-400`;
+  titleEl.innerHTML = `
+    <div class="flex items-center gap-2">
+      <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+      <span>Infrastructure Resources: ${op.name || op.package}</span>
+    </div>
+    <span class="text-xs font-mono bg-blue-950 border border-blue-800 text-blue-300 px-3 py-1 rounded">
+      Namespace: ${op.namespace}
+    </span>
+  `;
+
+  descEl.textContent = `Active ServiceAccounts, Deployments, Routes, and OLM Subscription metadata detected in namespace ${op.namespace}.`;
+
+  const components = op.components || [];
+
+  let html = `
+    <div class="bg-gray-950 border border-gray-800 p-4 rounded-lg mb-4 grid grid-cols-2 gap-4 font-mono text-xs">
+      <div>
+        <span class="text-gray-500 block mb-0.5">Install Plan Strategy</span>
+        <span class="text-white font-bold">${op.approval_strategy || 'Automatic'}</span>
+      </div>
+      <div>
+        <span class="text-gray-500 block mb-0.5">Catalog Source</span>
+        <span class="text-blue-400 font-bold">${op.catalog_source || 'redhat-operators'}</span>
+      </div>
+    </div>
+  `;
+
+  if (components.length === 0) {
+    html += `<div class="text-gray-500 italic text-sm text-center py-6 bg-gray-950 rounded border border-gray-800">No active infrastructure deployments or components detected.</div>`;
+  } else {
+    html += `
+      <div class="space-y-2">
+        <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Installed Components (${components.length})</div>
+        ${components.map(c => `
+          <div class="bg-gray-950 border border-gray-800 p-3 rounded flex justify-between items-center text-xs font-mono hover:border-gray-700 transition">
+            <div class="flex items-center gap-2">
+              <span class="bg-blue-950 border border-blue-800 text-blue-300 px-2 py-0.5 rounded text-[10px] uppercase font-bold">${c.kind}</span>
+              <span class="text-gray-200 font-bold">${c.name}</span>
+            </div>
+            <span class="text-gray-400">${c.status}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  listEl.innerHTML = html;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  setTimeout(() => {
+    modal.classList.remove('opacity-0');
+    content.classList.remove('scale-95');
+  }, 10);
 }
 
 document.addEventListener('DOMContentLoaded', fetchTargets);

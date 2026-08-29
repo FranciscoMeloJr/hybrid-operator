@@ -35,6 +35,21 @@ var (
         Version:  "v1",
         Resource: "clusterversions",
     }
+    routeGVR = schema.GroupVersionResource{
+        Group:    "route.openshift.io",
+        Version:  "v1",
+        Resource: "routes",
+    }
+    serviceAccountGVR = schema.GroupVersionResource{
+        Group:    "",
+        Version:  "v1",
+        Resource: "serviceaccounts",
+    }
+    deploymentGVR = schema.GroupVersionResource{
+        Group:    "apps",
+        Version:  "v1",
+        Resource: "deployments",
+    }
 )
 
 type CRDInfo struct {
@@ -46,25 +61,37 @@ type CRDInfo struct {
     ActiveCount int    `json:"active_count"`
 }
 
+type OperatorComponent struct {
+    Kind      string `json:"kind"`
+    Name      string `json:"name"`
+    Namespace string `json:"namespace"`
+    Status    string `json:"status"`
+}
+
 type OperatorInfo struct {
-    Name             string        `json:"name"`
-    Package          string        `json:"package"`
-    Namespace        string        `json:"namespace"`
-    Channel          string        `json:"channel"`
-    InstalledCSV     string        `json:"installedCSV"`
-    Version          string        `json:"version"`
-    Phase            string        `json:"phase"`
-    TargetVersion    string        `json:"target_version"`
-    TargetCSV        string        `json:"target_csv"`
-    CanUpgrade       bool          `json:"can_upgrade"`
-    UpgradeType      string        `json:"upgrade_type"`
-    CRDs             []CRDInfo     `json:"crds"`
-    OCPBlocker       bool          `json:"ocp_blocker"`
-    OCPBlockerReason string        `json:"ocp_blocker_reason"`
-    OCPNextSupported bool          `json:"ocp_next_supported"`
-    IsIdle           bool          `json:"is_idle"`
-    ActiveCRs        int           `json:"active_crs"`
-    CRDDiff          CRDDiffResult `json:"crd_diff"`
+    Name             string              `json:"name"`
+    Package          string              `json:"package"`
+    Namespace        string              `json:"namespace"`
+    Channel          string              `json:"channel"`
+    InstalledCSV     string              `json:"installedCSV"`
+    Version          string              `json:"version"`
+    Phase            string              `json:"phase"`
+    TargetVersion    string              `json:"target_version"`
+    TargetCSV        string              `json:"target_csv"`
+    CanUpgrade       bool                `json:"can_upgrade"`
+    UpgradeType      string              `json:"upgrade_type"`
+    CRDs             []CRDInfo           `json:"crds"`
+    OCPBlocker       bool                `json:"ocp_blocker"`
+    OCPBlockerReason string              `json:"ocp_blocker_reason"`
+    OCPNextSupported bool                `json:"ocp_next_supported"`
+    IsIdle           bool                `json:"is_idle"`
+    ActiveCRs        int                 `json:"active_crs"`
+    CRDDiff          CRDDiffResult       `json:"crd_diff"`
+    ExposedRoutes    []string            `json:"exposed_routes"`
+    ApprovalStrategy string              `json:"approval_strategy"`
+    CatalogSource    string              `json:"catalog_source"`
+    ServiceAccounts  []string            `json:"service_accounts"`
+    Components       []OperatorComponent `json:"components"`
 }
 
 type ClusterGovernanceResponse struct {
@@ -218,6 +245,16 @@ func GetClusterGovernance(ctx context.Context, dynClient dynamic.Interface) (Clu
         channel, _, _ := unstructured.NestedString(sub.Object, "spec", "channel")
         startingCSV, _, _ := unstructured.NestedString(sub.Object, "spec", "startingCSV")
 
+        approvalStrategy, _, _ := unstructured.NestedString(sub.Object, "spec", "installPlanApproval")
+        if approvalStrategy == "" {
+            approvalStrategy = "Automatic"
+        }
+
+        catalogSource, _, _ := unstructured.NestedString(sub.Object, "spec", "source")
+        if catalogSource == "" {
+            catalogSource = "redhat-operators"
+        }
+
         installedCSV, _, _ := unstructured.NestedString(sub.Object, "status", "installedCSV")
         if installedCSV == "" {
             installedCSV = startingCSV
@@ -242,6 +279,11 @@ func GetClusterGovernance(ctx context.Context, dynClient dynamic.Interface) (Clu
             OCPNextSupported: true,
             IsIdle:           false,
             ActiveCRs:        0,
+            ApprovalStrategy: approvalStrategy,
+            CatalogSource:    catalogSource,
+            ExposedRoutes:    []string{},
+            ServiceAccounts:  []string{},
+            Components:       []OperatorComponent{},
         }
 
         if installedCSV != "" {
@@ -285,6 +327,52 @@ func GetClusterGovernance(ctx context.Context, dynClient dynamic.Interface) (Clu
         // Mark operator as idle only if it provides CRDs but none are instantiated
         if len(op.CRDs) > 0 && activeCRCount == 0 {
             op.IsIdle = true
+        }
+
+        // Scan OpenShift Routes in operator namespace
+        routes, errRoute := dynClient.Resource(routeGVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
+        if errRoute == nil {
+            for _, r := range routes.Items {
+                host, foundHost, _ := unstructured.NestedString(r.Object, "spec", "host")
+                if foundHost && host != "" {
+                    op.ExposedRoutes = append(op.ExposedRoutes, host)
+                    op.Components = append(op.Components, OperatorComponent{
+                        Kind:      "Route",
+                        Name:      r.GetName(),
+                        Namespace: namespace,
+                        Status:    fmt.Sprintf("Host: %s", host),
+                    })
+                }
+            }
+        }
+
+        // Scan ServiceAccounts in operator namespace
+        sas, errSA := dynClient.Resource(serviceAccountGVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
+        if errSA == nil {
+            for _, sa := range sas.Items {
+                op.ServiceAccounts = append(op.ServiceAccounts, sa.GetName())
+                op.Components = append(op.Components, OperatorComponent{
+                    Kind:      "ServiceAccount",
+                    Name:      sa.GetName(),
+                    Namespace: namespace,
+                    Status:    "Active",
+                })
+            }
+        }
+
+        // Scan Deployments in operator namespace
+        deps, errDep := dynClient.Resource(deploymentGVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
+        if errDep == nil {
+            for _, dep := range deps.Items {
+                availReplicas, _, _ := unstructured.NestedInt64(dep.Object, "status", "availableReplicas")
+                replicas, _, _ := unstructured.NestedInt64(dep.Object, "status", "replicas")
+                op.Components = append(op.Components, OperatorComponent{
+                    Kind:      "Deployment",
+                    Name:      dep.GetName(),
+                    Namespace: namespace,
+                    Status:    fmt.Sprintf("%d/%d Replicas Available", availReplicas, replicas),
+                })
+            }
         }
 
         if op.Version == "" {

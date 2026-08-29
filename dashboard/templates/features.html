@@ -198,24 +198,24 @@
             <td class="px-4 py-4 font-bold text-white">Idle / Waste Operator Detection</td>
             <td class="px-4 py-4 text-gray-400">Flag installed operators with 0 active CRs to reclaim wasted compute.</td>
             <td class="px-4 py-4">
-              <span class="bg-gray-800 border border-gray-700 text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Planned</span>
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
             </td>
             <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">3 SP</td>
-            <td class="px-4 py-4 text-xs">Render "Idle Waste Warning" banner with potential monthly savings summary.</td>
-            <td class="px-4 py-4 text-xs">Correlate CSV owned CRDs with active CR instance counts in Go/Python.</td>
+            <td class="px-4 py-4 text-xs">Added "Idle / 0 CRs" metric card, modal view, and idle status badges on cards.</td>
+            <td class="px-4 py-4 text-xs">Correlated CSV owned CRDs with live active CR instance queries in <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">collector.go</code>.</td>
           </tr>
 
           <!-- Feature 13 -->
-          <tr class="hover:bg-gray-850/50 transition bg-purple-950/20 border-l-2 border-purple-500">
+          <tr class="hover:bg-gray-850/50 transition">
             <td class="px-4 py-4 text-center font-mono text-gray-500">13</td>
-            <td class="px-4 py-4 font-bold text-purple-300">Live Custom Resource (CR) Instances</td>
+            <td class="px-4 py-4 font-bold text-white">Live Custom Resource (CR) Instances</td>
             <td class="px-4 py-4 text-gray-400">View active CR instances under each CRD.</td>
             <td class="px-4 py-4">
-              <span class="bg-purple-950 border border-purple-800 text-purple-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block animate-pulse">In Progress</span>
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
             </td>
-            <td class="px-4 py-4 text-center font-mono font-bold text-purple-400">5 SP</td>
-            <td class="px-4 py-4 text-xs">Add clickable sub-panel under CRD to list live instances.</td>
-            <td class="px-4 py-4 text-xs">Extend Go collector/dynamic client to query CR instance endpoints.</td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">5 SP</td>
+            <td class="px-4 py-4 text-xs">CRD drawer displays live active CR instance counts per registered CRD.</td>
+            <td class="px-4 py-4 text-xs">Extended dynamic client in <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">collector.go</code> to query CR instance endpoints by GVR.</td>
           </tr>
 
           <!-- Feature 14 -->
@@ -224,24 +224,24 @@
             <td class="px-4 py-4 font-bold text-white">Health & Status Indicators</td>
             <td class="px-4 py-4 text-gray-400">Real-time operational health of operators and operands.</td>
             <td class="px-4 py-4">
-              <span class="bg-purple-950 border border-purple-800 text-purple-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">In Progress</span>
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
             </td>
             <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">3 SP</td>
-            <td class="px-4 py-4 text-xs">Display status pills (Succeeded, Failed, Upgrading).</td>
-            <td class="px-4 py-4 text-xs">Fetch CSV phase and operand deployment status via <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">collector.go</code>.</td>
+            <td class="px-4 py-4 text-xs">Added Degraded/Failed metric card and status pills (Succeeded, Failed, Pending).</td>
+            <td class="px-4 py-4 text-xs">Evaluated CSV status phase and fallback subscription state in <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">collector.go</code>.</td>
           </tr>
 
           <!-- Feature 15 -->
-          <tr class="hover:bg-gray-850/50 transition bg-amber-950/20">
+          <tr class="hover:bg-gray-850/50 transition">
             <td class="px-4 py-4 text-center font-mono text-gray-500">15</td>
-            <td class="px-4 py-4 font-bold text-amber-300">OCP Next Release Impact Predictor</td>
+            <td class="px-4 py-4 font-bold text-white">OCP Next Release Impact Predictor</td>
             <td class="px-4 py-4 text-gray-400">Project operator compatibility and blocker conditions for next OCP minor version.</td>
             <td class="px-4 py-4">
-              <span class="bg-amber-950 border border-amber-800 text-amber-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Paused</span>
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
             </td>
-            <td class="px-4 py-4 text-center font-mono font-bold text-amber-400">8 SP</td>
-            <td class="px-4 py-4 text-xs">Top impact alert banner, OCP ready/blocker pills, and blocker reasons on cards.</td>
-            <td class="px-4 py-4 text-xs">Query <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">ClusterVersion</code> in <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">collector.go</code> to calculate current vs next OCP minor version and evaluate CSV readiness.</td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">8 SP</td>
+            <td class="px-4 py-4 text-xs">Header OCP current vs target badges and blocker recommendation banners on cards.</td>
+            <td class="px-4 py-4 text-xs">Queries <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">ClusterVersion</code> in <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">collector.go</code> and calculates target OCP minor version readiness.</td>
           </tr>
 
           <!-- Feature 16 -->
@@ -294,6 +294,45 @@
             <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">3 SP</td>
             <td class="px-4 py-4 text-xs">Added <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/login</code> views and <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">401</code> redirect handling in <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">app.js</code>.</td>
             <td class="px-4 py-4 text-xs">Implemented <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">@requires_auth</code> decorator and OpenShift Secret integration in deployment pipeline.</td>
+          </tr>
+
+          <!-- Feature 20 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">20</td>
+            <td class="px-4 py-4 font-bold text-white">Cross-Namespace Conflict Engine</td>
+            <td class="px-4 py-4 text-gray-400">Detect multi-namespace operator installations causing split-brain.</td>
+            <td class="px-4 py-4">
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">5 SP</td>
+            <td class="px-4 py-4 text-xs">Added "Conflicts" metric card, package normalization helper, and modal inspector.</td>
+            <td class="px-4 py-4 text-xs">Fallback package resolution (<code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">spec.name</code>, <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">spec.package</code>, <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">sub.GetName()</code>) in <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">collector.go</code>.</td>
+          </tr>
+
+          <!-- Feature 21 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">21</td>
+            <td class="px-4 py-4 font-bold text-white">Deep CRD Schema Evolution Engine</td>
+            <td class="px-4 py-4 text-gray-400">Parse target CSV OpenAPI v3 schemas to catch breaking spec field removals against active CRs.</td>
+            <td class="px-4 py-4">
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">8 SP</td>
+            <td class="px-4 py-4 text-xs">Added visual Sankey flow diagram modal and spec-field breakdown table (<code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">crd_diff_viewer.js</code>).</td>
+            <td class="px-4 py-4 text-xs">Created <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">operator/pkg/collector/schema_diff.go</code> to recursively parse OpenAPI properties and inspect live CR manifests.</td>
+          </tr>
+
+          <!-- Feature 22 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">22</td>
+            <td class="px-4 py-4 font-bold text-white">External Route Exposure Tracker</td>
+            <td class="px-4 py-4 text-gray-400">Detect operator operands exposing external OpenShift Routes outside the cluster.</td>
+            <td class="px-4 py-4">
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">3 SP</td>
+            <td class="px-4 py-4 text-xs">Added "External Routes" metric card and route detail modal list view.</td>
+            <td class="px-4 py-4 text-xs">Added OpenShift Route GVR scanner (<code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">route.openshift.io/v1</code>) per operator namespace in <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">collector.go</code>.</td>
           </tr>
 
         </tbody>
