@@ -3,97 +3,194 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hybrid Operator Console</title>
+  <title>Hybrid Operator - Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link rel="stylesheet" href="/static/styles.css">
 </head>
-<body class="bg-gray-950 text-gray-200 antialiased min-h-screen p-6">
+<body class="bg-gray-950 text-gray-200 antialiased min-h-screen p-6 font-sans">
 
-  <!-- Header -->
+  <!-- Header Section -->
   <header class="border-b border-gray-800 pb-4 mb-6 flex justify-between items-center">
     <div class="flex items-center gap-4">
       <img src="/static/logo.png" alt="Apotheosis Logo" class="h-12 w-auto object-contain">
       <div>
-        <div class="flex items-center gap-3">
-          <h1 class="text-2xl font-bold text-white">OLM Governance Console</h1>
-          <div class="flex items-center gap-1.5 font-mono text-xs">
-            <span class="bg-gray-900 border border-gray-800 text-blue-400 px-2.5 py-0.5 rounded font-semibold" id="ocpCurrentBadge">
-              OCP --
-            </span>
-            <span class="text-gray-500">→</span>
-            <span class="bg-blue-950/60 border border-blue-800 text-blue-300 px-2.5 py-0.5 rounded font-semibold" id="ocpNextBadge">
-              Target --
-            </span>
-          </div>
-        </div>
-        <p class="text-sm text-gray-400">Powered by Flask & Hybrid Operator Sensor</p>
+        <h1 class="text-2xl font-bold text-white tracking-tight">Hybrid Operator Console</h1>
+        <p class="text-sm text-gray-400">Proactive Telemetry & Autonomous Remediation</p>
       </div>
     </div>
     
-    <div class="flex items-center gap-3">
-      {% include 'timer.html' %}
-      <button onclick="downloadReport()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded shadow transition text-sm font-medium flex items-center gap-2">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-        Export Report
-      </button>
-      <a href="/features" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-2 rounded shadow transition text-sm font-medium">Features</a>
-      <a href="/help" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-2 rounded shadow transition text-sm font-medium">Help</a>
-      <button onclick="fetchTargets()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded shadow transition text-sm font-medium">Refresh Data</button>
+    <div class="flex flex-col items-end gap-2">
+      <div class="flex gap-3">
+        <button onclick="downloadReport()" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-2 rounded shadow transition text-sm font-medium flex items-center gap-2 border border-gray-700">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+          Export Report
+        </button>
+        <a href="/features" class="bg-blue-900/50 hover:bg-blue-800/60 border border-blue-700/50 text-blue-300 px-4 py-2 rounded shadow transition text-sm font-medium">
+          Roadmap
+        </a>
+        <a href="/logout" class="bg-red-900/50 hover:bg-red-800/60 border border-red-700/50 text-red-300 px-4 py-2 rounded shadow transition text-sm font-medium">
+          Logout
+        </a>
+      </div>
+      <div class="flex items-center gap-2 text-xs font-mono mt-1">
+        <span id="ocpCurrentBadge" class="bg-gray-800 text-gray-300 px-2 py-0.5 rounded border border-gray-700">OCP v...</span>
+        <span class="text-gray-500">➔</span>
+        <span id="ocpNextBadge" class="bg-blue-900 text-blue-300 px-2 py-0.5 rounded border border-blue-800">Target v...</span>
+      </div>
     </div>
   </header>
 
-  <!-- Summary Cards -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6" id="summaryDashboard">
-    <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow">
-      <div class="text-xs font-semibold uppercase text-gray-400">Total Operators</div>
-      <div class="text-3xl font-bold text-white mt-1" id="metricTotal">0</div>
-      <div class="text-xs text-gray-500 mt-1">Discovered on cluster</div>
-    </div>
-    <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow">
-      <div class="text-xs font-semibold uppercase text-emerald-400">Up To Date</div>
-      <div class="text-3xl font-bold text-emerald-400 mt-1" id="metricUpToDate">0</div>
-      <div class="text-xs text-gray-500 mt-1">On latest channel head</div>
-    </div>
-    <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow">
-      <div class="text-xs font-semibold uppercase text-amber-400">Updates Pending</div>
-      <div class="text-3xl font-bold text-amber-400 mt-1" id="metricUpgradeable">0</div>
-      <div class="text-xs text-gray-500 mt-1">Newer CSV available</div>
-    </div>
-    <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow">
-      <div class="text-xs font-semibold uppercase text-red-400">Major Risks</div>
-      <div class="text-3xl font-bold text-red-400 mt-1" id="metricMajorRisk">0</div>
-      <div class="text-xs text-gray-500 mt-1">Schema change risk</div>
-    </div>
-    <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow">
-      <div class="text-xs font-semibold uppercase text-purple-400">Idle Operators</div>
-      <div class="text-3xl font-bold text-purple-400 mt-1" id="metricIdle">0</div>
-      <div class="text-xs text-gray-500 mt-1">No active CRs found</div>
-    </div>
-  </div>
+  <!-- ========================================== -->
+  <!-- GROUPED METRIC SECTIONS                    -->
+  <!-- ========================================== -->
+  <div class="space-y-6 mb-8">
 
-  <!-- Analytics Charts Section -->
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-    <div class="bg-gray-900 border border-gray-800 p-5 rounded-lg shadow">
-      <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Operator Lifecycle Distribution</h3>
-      <div class="h-48 flex justify-center items-center">
+    <!-- 1. Lifecycle & Upgrades Section -->
+    <section>
+      <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 border-b border-gray-800 pb-2">Lifecycle & Upgrades</h3>
+      <div class="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <!-- Up to Date -->
+        <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-emerald-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('uptodate')">
+          <div class="text-3xl font-bold text-white mb-1 group-hover:text-emerald-400 transition" id="metricUpToDate">0</div>
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Up to Date</div>
+        </div>
+        <!-- Updates Pending -->
+        <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-amber-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('upgradeable')">
+          <div class="text-3xl font-bold text-white mb-1 group-hover:text-amber-400 transition" id="metricUpgradeable">0</div>
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Updates Pending</div>
+        </div>
+        <!-- Pending Approval -->
+        <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-cyan-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('pending')">
+          <div class="text-3xl font-bold text-white mb-1 group-hover:text-cyan-400 transition" id="metricPending">0</div>
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Pending Approval</div>
+        </div>
+        <!-- Major Risks -->
+        <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-orange-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('major')">
+          <div class="text-3xl font-bold text-white mb-1 group-hover:text-orange-400 transition" id="metricMajorRisk">0</div>
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Major Risks</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Health & Deep Analysis Section -->
+    <section>
+      <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 border-b border-gray-800 pb-2">Health & Deep Analysis</h3>
+      <div class="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <!-- Degraded / Failed -->
+        <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-red-600/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('degraded')">
+          <div class="text-3xl font-bold text-white mb-1 group-hover:text-red-500 transition" id="metricDegraded">0</div>
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Degraded / Failed</div>
+        </div>
+        <!-- Overloaded -->
+        <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-pink-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('overloaded')">
+          <div class="text-3xl font-bold text-white mb-1 group-hover:text-pink-400 transition" id="metricOverloaded">0</div>
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Overloaded (Restarts)</div>
+        </div>
+        <!-- Conflicts -->
+        <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-red-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('conflict')">
+          <div class="text-3xl font-bold text-white mb-1 group-hover:text-red-400 transition" id="metricConflict">0</div>
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Conflicts (Duplicates)</div>
+        </div>
+        <!-- Orphaned CRs -->
+        <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-stone-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('orphaned')">
+          <div class="text-3xl font-bold text-white mb-1 group-hover:text-stone-400 transition" id="metricOrphaned">0</div>
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Orphaned CRs</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Utilization & General Status Section -->
+    <section>
+      <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 border-b border-gray-800 pb-2">Utilization & General Status</h3>
+      <div class="grid grid-cols-2 xl:grid-cols-2 gap-4">
+        <!-- Total Subs -->
+        <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-blue-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('total')">
+          <div class="text-3xl font-bold text-white mb-1 group-hover:text-blue-400 transition" id="metricTotal">0</div>
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Total Subscriptions</div>
+        </div>
+        <!-- Idle -->
+        <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-purple-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('idle')">
+          <div class="text-3xl font-bold text-white mb-1 group-hover:text-purple-400 transition" id="metricIdle">0</div>
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Idle (0 Active CRs)</div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+  <!-- ========================================== -->
+
+  <!-- Charts Section -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div class="md:col-span-1 bg-gray-900 border border-gray-800 p-5 rounded-lg shadow">
+      <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Cluster Lifecycle Status</h3>
+      <div class="h-48 relative">
         <canvas id="statusChart"></canvas>
       </div>
     </div>
-
-    <div class="bg-gray-900 border border-gray-800 p-5 rounded-lg shadow">
-      <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Subscription Channel Streams</h3>
-      <div class="h-48 flex justify-center items-center">
+    
+    <div class="md:col-span-2 bg-gray-900 border border-gray-800 p-5 rounded-lg shadow flex flex-col justify-between">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Channel Distribution</h3>
+        
+        <!-- Refresh Controls -->
+        <div class="flex items-center gap-3">
+          <div class="relative w-6 h-6 flex items-center justify-center">
+            <svg class="w-full h-full transform -rotate-90" viewBox="0 0 24 24">
+              <circle class="text-gray-800" stroke-width="2" stroke="currentColor" fill="transparent" r="10" cx="12" cy="12" />
+              <circle id="timerProgress" class="text-blue-500 transition-all duration-1000 ease-linear" stroke-width="2" stroke-dasharray="62.83" stroke-dashoffset="0" stroke="currentColor" fill="transparent" r="10" cx="12" cy="12" />
+            </svg>
+            <span id="refreshTimerText" class="absolute text-[8px] font-bold text-gray-300">60s</span>
+          </div>
+          
+          <select id="refreshInterval" onchange="updateRefreshInterval()" class="bg-gray-950 border border-gray-700 text-gray-300 text-xs rounded focus:ring-blue-500 focus:border-blue-500 block p-1.5">
+            <option value="15">15 sec</option>
+            <option value="30">30 sec</option>
+            <option value="60" selected>1 min</option>
+            <option value="300">5 min</option>
+            <option value="0">Off</option>
+          </select>
+        </div>
+      </div>
+      <div class="h-48 relative w-full">
         <canvas id="channelChart"></canvas>
       </div>
     </div>
   </div>
 
-  <!-- Main Operator List -->
-  <div class="grid grid-cols-1 gap-4" id="operatorGrid">
-    <div class="text-center text-gray-500 py-10">Waiting for Operator Telemetry...</div>
+  <!-- Header for Operator Grid -->
+  <div class="flex justify-between items-end mb-4 border-b border-gray-800 pb-2">
+    <h3 class="text-lg font-bold text-white">Installed Operator Telemetry</h3>
   </div>
 
+  <!-- Main Operator Grid -->
+  <div id="operatorGrid" class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+    <div class="text-center text-gray-500 py-10 col-span-full">Loading operator telemetry from Go sensor...</div>
+  </div>
+
+  <!-- Unified Universal Metric Modal -->
+  <div id="unifiedModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 opacity-0 transition-opacity duration-200">
+    <div class="bg-gray-900 border border-gray-700 p-6 rounded-lg shadow-2xl w-full max-w-2xl relative transform scale-95 transition-transform duration-200" id="unifiedModalContent">
+      
+      <!-- Close Button -->
+      <button onclick="closeMetricModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+      
+      <h3 id="unifiedModalTitle" class="text-xl font-bold mb-2 flex items-center gap-2 text-white">
+        <!-- Title injected by JS -->
+      </h3>
+      <p id="unifiedModalDesc" class="text-sm text-gray-400 mb-5 pb-4 border-b border-gray-800">
+        <!-- Description injected by JS -->
+      </p>
+      
+      <ul id="unifiedModalList" class="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+        <!-- JavaScript will inject the specific operator list here -->
+      </ul>
+      
+    </div>
+  </div>
+
+  <!-- Connect external JavaScript logic -->
   <script src="/static/app.js"></script>
 </body>
 </html>

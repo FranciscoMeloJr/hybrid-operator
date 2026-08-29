@@ -1,0 +1,62 @@
+<!-- Interactive Metric Grid (10 Cards / 2 Rows) -->
+<div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
+  <!-- 1. Total -->
+  <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-blue-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('total')">
+    <div class="text-2xl font-bold text-white mb-1 group-hover:text-blue-400 transition" id="metricTotal">0</div>
+    <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Total Subs</div>
+  </div>
+
+  <!-- 2. Up to Date -->
+  <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-emerald-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('uptodate')">
+    <div class="text-2xl font-bold text-white mb-1 group-hover:text-emerald-400 transition" id="metricUpToDate">0</div>
+    <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Up to Date</div>
+  </div>
+
+  <!-- 3. Updates Pending -->
+  <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-amber-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('upgradeable')">
+    <div class="text-2xl font-bold text-white mb-1 group-hover:text-amber-400 transition" id="metricUpgradeable">0</div>
+    <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Updates Pending</div>
+  </div>
+
+  <!-- 4. Major Risks -->
+  <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-orange-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('major')">
+    <div class="text-2xl font-bold text-white mb-1 group-hover:text-orange-400 transition" id="metricMajorRisk">0</div>
+    <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Major Risks</div>
+  </div>
+
+  <!-- 5. Idle / 0 CRs -->
+  <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-purple-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('idle')">
+    <div class="text-2xl font-bold text-white mb-1 group-hover:text-purple-400 transition" id="metricIdle">0</div>
+    <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Idle (0 CRs)</div>
+  </div>
+
+  <!-- 6. Conflicts -->
+  <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-red-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('conflict')">
+    <div class="text-2xl font-bold text-white mb-1 group-hover:text-red-400 transition" id="metricConflict">0</div>
+    <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Conflicts</div>
+  </div>
+
+  <!-- 7. Degraded / Failed -->
+  <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-red-600/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('degraded')">
+    <div class="text-2xl font-bold text-white mb-1 group-hover:text-red-500 transition" id="metricDegraded">0</div>
+    <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Degraded</div>
+  </div>
+
+  <!-- 8. Overloaded -->
+  <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-pink-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('overloaded')">
+    <div class="text-2xl font-bold text-white mb-1 group-hover:text-pink-400 transition" id="metricOverloaded">0</div>
+    <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Overloaded</div>
+  </div>
+
+  <!-- 9. Pending Approval -->
+  <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-cyan-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('pending')">
+    <div class="text-2xl font-bold text-white mb-1 group-hover:text-cyan-400 transition" id="metricPending">0</div>
+    <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Pending Approval</div>
+  </div>
+
+  <!-- 10. Orphaned CRs -->
+  <div class="bg-gray-900 border border-gray-800 p-4 rounded-lg shadow cursor-pointer hover:border-stone-500/50 hover:bg-gray-800/50 transition group" onclick="openMetricModal('orphaned')">
+    <div class="text-2xl font-bold text-white mb-1 group-hover:text-stone-400 transition" id="metricOrphaned">0</div>
+    <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-300">Orphaned CRs</div>
+  </div>
+</div>

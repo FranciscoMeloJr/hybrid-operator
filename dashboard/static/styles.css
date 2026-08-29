@@ -1,69 +1,83 @@
-/* Core Theme Variables */
-:root {
-    --bg-base: #0d1117;
-    --bg-surface: #161b22;
-    --border-subtle: #30363d;
-    --text-main: #c9d1d9;
-    --text-muted: #8b949e;
-    --accent-blue: #58a6ff;
-    --accent-green: #238636;
-    --accent-green-hover: #2ea043;
+/* =============================================================================
+   LIVE TELEMETRY & ROUTE METRIC STYLING
+   ============================================================================= */
+.badge-live {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--accent-green, #10b981);
+    border: 1px solid var(--accent-green, #10b981);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
 }
 
-body {
-    background-color: var(--bg-base);
-    color: var(--text-main);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-    -webkit-font-smoothing: antialiased;
-}
-
-/* Header & Navigation */
-.console-header {
-    border-bottom: 1px solid var(--border-subtle);
-    padding-bottom: 1rem;
-    margin-bottom: 1.5rem;
-    display: flex;
-    justify-content: space-between;
+.metric-badge {
+    display: inline-flex;
     align-items: center;
+    gap: 4px;
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--accent-blue, #3b82f6);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.8rem;
 }
 
-/* Custom Buttons */
-.btn {
-    padding: 0.5rem 1rem;
-    border-radius: 0.375rem;
+.metric-badge.mem {
+    background: rgba(139, 92, 246, 0.1);
+    color: var(--accent-purple, #8b5cf6);
+    border-color: rgba(139, 92, 246, 0.2);
+}
+
+.route-tag {
+    display: inline-block;
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-family: monospace;
+    margin: 2px;
+}
+
+.route-none {
+    color: var(--text-muted, #8b949e);
+    font-style: italic;
+    font-size: 0.8rem;
+}
+
+.status-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.status-up-to-date {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+}
+
+.status-upgrade-available {
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+}
+
+.btn-logout {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: 1px solid #ef4444;
+    padding: 6px 12px;
+    border-radius: 6px;
+    text-decoration: none;
     font-size: 0.875rem;
     font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    text-decoration: none;
-    border: 1px solid transparent;
+    transition: all 0.2s;
 }
 
-.btn-primary {
-    background-color: var(--accent-blue);
+.btn-logout:hover {
+    background: #ef4444;
     color: #ffffff;
-}
-
-.btn-primary:hover {
-    filter: brightness(1.1);
-    transform: translateY(-1px);
-}
-
-.btn-secondary {
-    background-color: var(--bg-surface);
-    color: var(--text-main);
-    border-color: var(--border-subtle);
-}
-
-.btn-secondary:hover {
-    background-color: var(--border-subtle);
-    color: #ffffff;
-}
-
-/* Page Containers */
-.page-wrapper {
-    min-height: 100vh;
-    padding: 1.5rem;
-    max-width: 1400px;
-    margin: 0 auto;
 }

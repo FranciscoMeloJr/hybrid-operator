@@ -6,7 +6,21 @@ set -e
 # ==============================================================================
 NAMESPACE="hybrid-apps"
 BRANCH_NAME="feat/multi-container-pod"
-TARGET_NODE="worker-node-redacted"
+
+# Load environment variables from .env
+if [ -f .env ]; then
+    echo "--> Loading configuration from .env file..."
+    export $(grep -v '^#' .env | xargs)
+else
+    echo "--> ERROR: .env file not found!"
+    exit 1
+fi
+
+# Fallback check
+if [ -z "$TARGET_NODE" ]; then
+    echo "--> ERROR: TARGET_NODE is not defined in .env"
+    exit 1
+fi
 
 # ==============================================================================
 # Function: setup_git_branch
@@ -26,7 +40,6 @@ setup_git_branch() {
 # ==============================================================================
 setup_namespace_and_rbac() {
     oc get project "$NAMESPACE" >/dev/null 2>&1 || oc new-project "$NAMESPACE"
-
     cat <<EOF | oc apply -f -
 apiVersion: v1
 kind: ServiceAccount
@@ -62,12 +75,11 @@ EOF
 }
 
 # ==============================================================================
-# Function: setup_buildconfigs (BUMPED RESOURCES for faster compilation)
+# Function: setup_buildconfigs
 # ==============================================================================
 setup_buildconfigs() {
     oc delete bc hybrid-operator -n "$NAMESPACE" --ignore-not-found
     oc delete bc dashboard -n "$NAMESPACE" --ignore-not-found
-
     cat <<EOF | oc apply -f -
 apiVersion: image.openshift.io/v1
 kind: ImageStream
@@ -136,6 +148,16 @@ EOF
 # ==============================================================================
 deploy_application() {
     cat <<EOF | oc apply -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: console-hybrid-secrets
+  namespace: ${NAMESPACE}
+type: Opaque
+stringData:
+  ADMIN_PASS: "${ADMIN_PASS}"
+  FLASK_SECRET: "${FLASK_SECRET}"
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -172,7 +194,6 @@ spec:
             requests:
               cpu: 100m
               memory: 128Mi
-
         # Container 2: Python Web Console
         - name: web-dashboard
           image: image-registry.openshift-image-registry.svc:5000/${NAMESPACE}/dashboard:latest
@@ -183,6 +204,16 @@ spec:
           env:
             - name: GO_INVENTORY_URL
               value: "http://127.0.0.1:8080/api/v1/inventory"
+            - name: ADMIN_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: console-hybrid-secrets
+                  key: ADMIN_PASS
+            - name: FLASK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: console-hybrid-secrets
+                  key: FLASK_SECRET
           resources:
             requests:
               cpu: 100m
@@ -233,7 +264,6 @@ build_images_and_wait() {
     echo "--> Waiting for both builds to complete..."
     wait $PID_OPERATOR
     wait $PID_DASHBOARD
-
     echo "--> Both builds completed successfully!"
 }
 
@@ -241,8 +271,6 @@ build_images_and_wait() {
 # Function: verify_rollout
 # ==============================================================================
 verify_rollout() {
-    # Force a rollout restart to bypass any Kubelet ImagePullBackOff timers 
-    # that started while the deployment was waiting for the builds to finish
     echo "--> Triggering fresh rollout to pick up newly built images..."
     oc rollout restart deployment/console-hybrid-app -n "$NAMESPACE"
     oc rollout status deployment/console-hybrid-app -n "$NAMESPACE"
@@ -261,37 +289,58 @@ verify_rollout() {
 # Main Execution Flow
 # ==============================================================================
 main() {
-    echo "=================================================="
-    echo " 1. Git Branch Setup"
-    echo "=================================================="
-    setup_git_branch
+    TARGET_COMPONENT=$1
 
-    echo "=================================================="
-    echo " 2. Namespace & RBAC Setup"
-    echo "=================================================="
-    setup_namespace_and_rbac
+    if [ -z "$TARGET_COMPONENT" ]; then
+        echo "=================================================="
+        echo " 1. Git Branch Setup"
+        echo "=================================================="
+        setup_git_branch
 
-    echo "=================================================="
-    echo " 3. Re-creating BuildConfigs with Elevated Resources"
-    echo "=================================================="
-    setup_buildconfigs
+        echo "=================================================="
+        echo " 2. Namespace & RBAC Setup"
+        echo "=================================================="
+        setup_namespace_and_rbac
 
-    echo "=================================================="
-    echo " 4. Applying Multi-Container Pod Deployment First"
-    echo "=================================================="
-    # Deploying now stages the infrastructure while builds process
-    deploy_application
+        echo "=================================================="
+        echo " 3. Re-creating BuildConfigs with Elevated Resources"
+        echo "=================================================="
+        setup_buildconfigs
 
-    echo "=================================================="
-    echo " 5. Building Images (Parallel)"
-    echo "=================================================="
-    build_images_and_wait
+        echo "=================================================="
+        echo " 4. Applying Multi-Container Pod Deployment First"
+        echo "=================================================="
+        deploy_application
 
-    echo "=================================================="
-    echo " 6. Verifying Deployment Rollout"
-    echo "=================================================="
-    verify_rollout
+        echo "=================================================="
+        echo " 5. Building Images (Parallel)"
+        echo "=================================================="
+        build_images_and_wait
+
+        echo "=================================================="
+        echo " 6. Verifying Deployment Rollout"
+        echo "=================================================="
+        verify_rollout
+
+    elif [ "$TARGET_COMPONENT" == "dashboard" ]; then
+        echo "=================================================="
+        echo " Fast Build: dashboard only"
+        echo "=================================================="
+        oc start-build dashboard --from-dir=./dashboard --follow -n "$NAMESPACE"
+        verify_rollout
+
+    elif [ "$TARGET_COMPONENT" == "hybrid-operator" ]; then
+        echo "=================================================="
+        echo " Fast Build: hybrid-operator only"
+        echo "=================================================="
+        oc start-build hybrid-operator --from-dir=./operator --follow -n "$NAMESPACE"
+        verify_rollout
+
+    else
+        echo "ERROR: Invalid argument."
+        echo "Usage: ./deploy.sh [dashboard | hybrid-operator]"
+        exit 1
+    fi
 }
 
-# Execute script
 main "$@"

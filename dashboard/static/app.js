@@ -42,9 +42,10 @@ function updateTimerUI() {
 
 function startAutoRefresh() {
   if (timerId) clearInterval(timerId);
+
   countdown = currentInterval;
   updateTimerUI();
-  
+
   if (currentInterval <= 0) return;
 
   timerId = setInterval(() => {
@@ -60,31 +61,47 @@ function startAutoRefresh() {
 async function fetchTargets() {
   try {
     const response = await fetch('/api/v1/catalog/targets');
+    if (response.status === 401) {
+      window.location.href = '/login';
+      return;
+    }
     const data = await response.json();
     
     currentOperatorData = data.operators || [];
     
-    const ocpCurrent = data.ocp_current_version || "4.20.16";
-    const ocpNext = data.ocp_next_version || "4.21.0";
+    // Strictly use the live data from the Go Operator, fallback to "Unknown" if missing
+    const ocpCurrent = data.ocp_current_version || "Unknown";
+    const ocpNext = data.ocp_next_version || "Unknown";
     
-    document.getElementById('ocpCurrentBadge').textContent = `OCP v${ocpCurrent}`;
-    document.getElementById('ocpNextBadge').textContent = `Target v${ocpNext}`;
+    if (document.getElementById('ocpCurrentBadge')) {
+        document.getElementById('ocpCurrentBadge').textContent = `OCP v${ocpCurrent}`;
+    }
+    if (document.getElementById('ocpNextBadge')) {
+        document.getElementById('ocpNextBadge').textContent = `Target v${ocpNext}`;
+    }
 
     updateMetrics(currentOperatorData);
     renderCharts(currentOperatorData);
     renderGrid(currentOperatorData);
+
     startAutoRefresh();
   } catch (error) {
     console.error("Error fetching operator data:", error);
-    document.getElementById('operatorGrid').innerHTML = `
-      <div class="bg-red-950 border border-red-800 text-red-300 p-4 rounded-lg text-center">
-        Failed to communicate with Go sensor backend.
-      </div>
-    `;
+    const grid = document.getElementById('operatorGrid');
+    if (grid) {
+      grid.innerHTML = `
+        <div class="col-span-full bg-red-950 border border-red-800 text-red-300 p-4 rounded-lg text-center">
+          Failed to communicate with Go sensor backend.
+        </div>
+      `;
+    }
     startAutoRefresh();
   }
 }
 
+// ============================================================================
+// METRICS & UNIFIED MODAL LOGIC
+// ============================================================================
 function updateMetrics(operators) {
   const total = operators.length;
   const upgradeable = operators.filter(op => op.can_upgrade).length;
@@ -92,49 +109,147 @@ function updateMetrics(operators) {
   const idleCount = operators.filter(op => op.is_idle).length;
   const upToDate = total - upgradeable;
 
-  const elTotal = document.getElementById('metricTotal');
-  const elUpToDate = document.getElementById('metricUpToDate');
-  const elUpgradeable = document.getElementById('metricUpgradeable');
-  const elMajorRisk = document.getElementById('metricMajorRisk');
-  const elIdle = document.getElementById('metricIdle');
-
-  if (elTotal) elTotal.textContent = total;
-  if (elUpToDate) elUpToDate.textContent = upToDate;
-  if (elUpgradeable) elUpgradeable.textContent = upgradeable;
-  if (elMajorRisk) elMajorRisk.textContent = majorRisk;
-  if (elIdle) elIdle.textContent = idleCount;
+  if (document.getElementById('metricTotal')) document.getElementById('metricTotal').textContent = total;
+  if (document.getElementById('metricUpToDate')) document.getElementById('metricUpToDate').textContent = upToDate;
+  if (document.getElementById('metricUpgradeable')) document.getElementById('metricUpgradeable').textContent = upgradeable;
+  if (document.getElementById('metricMajorRisk')) document.getElementById('metricMajorRisk').textContent = majorRisk;
+  if (document.getElementById('metricIdle')) document.getElementById('metricIdle').textContent = idleCount;
 }
 
+function openMetricModal(type) {
+  const modal = document.getElementById('unifiedModal');
+  const content = document.getElementById('unifiedModalContent');
+  const titleEl = document.getElementById('unifiedModalTitle');
+  const descEl = document.getElementById('unifiedModalDesc');
+  const listEl = document.getElementById('unifiedModalList');
+
+  if (!modal || !content) return;
+
+  let title = '';
+  let desc = '';
+  let ops = [];
+  let color = '';
+  let borderClass = '';
+
+  switch(type) {
+    case 'total':
+      title = 'All Managed Subscriptions';
+      desc = 'A complete list of all OpenShift Lifecycle Manager (OLM) subscriptions currently detected on this cluster.';
+      ops = currentOperatorData;
+      color = 'text-blue-400';
+      borderClass = 'hover:border-blue-500/50';
+      break;
+    case 'uptodate':
+      title = '✓ Up to Date Operators';
+      desc = 'These operators are fully aligned with the latest stable version available in their current subscription channel.';
+      ops = currentOperatorData.filter(op => !op.can_upgrade);
+      color = 'text-emerald-400';
+      borderClass = 'hover:border-emerald-500/50';
+      break;
+    case 'upgradeable':
+      title = '↻ Updates Pending';
+      desc = 'These operators have newer versions available. Consider planning a maintenance window to apply these updates.';
+      ops = currentOperatorData.filter(op => op.can_upgrade);
+      color = 'text-amber-400';
+      borderClass = 'hover:border-amber-500/50';
+      break;
+    case 'major':
+      title = '⚠️ Major Risk Upgrades';
+      desc = 'Operators with pending MAJOR version bumps (e.g., v1.x to v2.x). These often contain breaking CRD schema changes and require manual verification.';
+      ops = currentOperatorData.filter(op => op.can_upgrade && op.upgrade_type === 'MAJOR');
+      color = 'text-red-400';
+      borderClass = 'hover:border-red-500/50';
+      break;
+    case 'idle':
+      title = '💤 Idle & Unused Operators';
+      desc = 'These operators are installed and consuming cluster resources, but currently have 0 active Custom Resource instances. Consider removing them to reclaim compute waste.';
+      ops = currentOperatorData.filter(op => op.is_idle);
+      color = 'text-purple-400';
+      borderClass = 'hover:border-purple-500/50';
+      break;
+  }
+
+  titleEl.className = `text-xl font-bold mb-2 flex items-center gap-2 ${color}`;
+  titleEl.innerHTML = title;
+  descEl.textContent = desc;
+
+  if (ops.length === 0) {
+    listEl.innerHTML = `<li class="text-gray-500 italic text-sm text-center py-6 bg-gray-950 rounded border border-gray-800">Excellent! No operators found in this category.</li>`;
+  } else {
+    listEl.innerHTML = ops.map(op => {
+      const upgradeArrow = op.can_upgrade 
+        ? `<span class="opacity-50">➔</span> <span class="font-bold">${op.target_version || 'Target'}</span>` 
+        : '';
+        
+      return `
+      <li class="bg-gray-950 border border-gray-800 p-4 rounded flex justify-between items-center transition cursor-default ${borderClass}">
+        <div>
+          <span class="font-bold text-gray-200 block text-base">${op.name || op.package}</span>
+          <span class="text-xs text-gray-500 font-mono mt-1 block">Namespace: ${op.namespace}</span>
+        </div>
+        <div class="text-xs font-mono bg-gray-900 px-3 py-1.5 rounded border border-gray-800 flex items-center gap-2 ${color}">
+          <span class="${op.can_upgrade ? 'text-gray-400' : ''}">${op.version || 'Current'}</span>
+          ${upgradeArrow}
+        </div>
+      </li>
+    `}).join('');
+  }
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  setTimeout(() => {
+    modal.classList.remove('opacity-0');
+    content.classList.remove('scale-95');
+  }, 10);
+}
+
+function closeMetricModal() {
+  const modal = document.getElementById('unifiedModal');
+  const content = document.getElementById('unifiedModalContent');
+  if (!modal || !content) return;
+  
+  modal.classList.add('opacity-0');
+  content.classList.add('scale-95');
+  setTimeout(() => {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }, 200);
+}
+
+// ============================================================================
+// CHARTS & GRID RENDERING
+// ============================================================================
 function renderCharts(operators) {
   const total = operators.length;
   const upgradeable = operators.filter(op => op.can_upgrade).length;
   const upToDate = total - upgradeable;
 
-  const ctxStatus = document.getElementById('statusChart').getContext('2d');
-  if (statusChartInstance) statusChartInstance.destroy();
-
-  statusChartInstance = new Chart(ctxStatus, {
-    type: 'doughnut',
-    data: {
-      labels: ['Up to Date', 'Pending Upgrade'],
-      datasets: [{
-        data: [upToDate, upgradeable],
-        backgroundColor: ['#10b981', '#f59e0b'],
-        borderColor: '#111827',
-        borderWidth: 2
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: 'right',
-          labels: { color: '#9ca3af', font: { size: 11 } }
+  const ctxStatus = document.getElementById('statusChart');
+  if (ctxStatus) {
+    if (statusChartInstance) statusChartInstance.destroy();
+    statusChartInstance = new Chart(ctxStatus.getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Up to Date', 'Pending Upgrade'],
+        datasets: [{
+          data: [upToDate, upgradeable],
+          backgroundColor: ['#10b981', '#f59e0b'],
+          borderColor: '#111827',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: { color: '#9ca3af', font: { size: 11 } }
+          }
         }
       }
-    }
-  });
+    });
+  }
 
   const channelCounts = {};
   operators.forEach(op => {
@@ -142,40 +257,43 @@ function renderCharts(operators) {
     channelCounts[ch] = (channelCounts[ch] || 0) + 1;
   });
 
-  const ctxChannel = document.getElementById('channelChart').getContext('2d');
-  if (channelChartInstance) channelChartInstance.destroy();
-
-  channelChartInstance = new Chart(ctxChannel, {
-    type: 'bar',
-    data: {
-      labels: Object.keys(channelCounts),
-      datasets: [{
-        label: 'Operators',
-        data: Object.values(channelCounts),
-        backgroundColor: '#3b82f6',
-        borderRadius: 4
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false }
+  const ctxChannel = document.getElementById('channelChart');
+  if (ctxChannel) {
+    if (channelChartInstance) channelChartInstance.destroy();
+    channelChartInstance = new Chart(ctxChannel.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: Object.keys(channelCounts),
+        datasets: [{
+          label: 'Operators',
+          data: Object.values(channelCounts),
+          backgroundColor: '#3b82f6',
+          borderRadius: 4
+        }]
       },
-      scales: {
-        x: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { display: false } },
-        y: { ticks: { color: '#9ca3af', precision: 0 }, grid: { color: '#1f2937' } }
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { display: false } },
+          y: { ticks: { color: '#9ca3af', precision: 0 }, grid: { color: '#1f2937' } }
+        }
       }
-    }
-  });
+    });
+  }
 }
 
 function renderGrid(operators) {
   const grid = document.getElementById('operatorGrid');
+  if (!grid) return;
+  
   grid.innerHTML = '';
 
   if (operators.length === 0) {
-    grid.innerHTML = `<div class="text-center text-gray-500 py-10">No operator subscriptions found in cluster.</div>`;
+    grid.innerHTML = `<div class="text-center text-gray-500 py-10 col-span-full">No operator subscriptions found in cluster.</div>`;
     return;
   }
 
@@ -190,7 +308,7 @@ function renderGrid(operators) {
     const crds = op.crds || [];
 
     let badges = [];
-    
+
     if (op.is_idle) {
       badges.push(`<span class="bg-purple-900/60 border border-purple-800 text-purple-300 text-xs px-2.5 py-1 rounded-full font-semibold">Idle: 0 CRs Active</span>`);
     }
@@ -208,8 +326,8 @@ function renderGrid(operators) {
     }
 
     let badgeHTML = badges.join(' ');
-
     let projectionHTML = '';
+
     if (op.can_upgrade) {
       projectionHTML = `
         <div class="mt-4 pt-4 border-t border-gray-800/80 bg-gray-950/50 -mx-5 -mb-5 p-5">
@@ -263,8 +381,8 @@ function renderGrid(operators) {
           <p class="text-xs text-gray-400 mt-1">
             Namespace: <span class="text-gray-300 font-mono">${op.namespace}</span> | 
             Channel: <span class="text-gray-300 font-mono">${op.channel}</span> | 
-            Status: <span class="${op.phase === 'Succeeded' ? 'text-emerald-400' : 'text-amber-400'} font-bold">${op.phase}</span> |
-            CRDs: <span class="text-blue-400 font-bold">${crds.length}</span> |
+            Status: <span class="${op.phase === 'Succeeded' ? 'text-emerald-400' : 'text-amber-400'} font-bold">${op.phase}</span> | 
+            CRDs: <span class="text-blue-400 font-bold">${crds.length}</span> | 
             Active CRs: <span class="${op.active_crs === 0 ? 'text-red-400' : 'text-emerald-400'} font-bold">${op.active_crs}</span>
           </p>
         </div>
@@ -275,9 +393,7 @@ function renderGrid(operators) {
           </span>
         </div>
       </div>
-
       ${projectionHTML}
-
       <div id="crdDrawer-${index}" class="hidden mt-4 pt-4 border-t border-gray-800">
         <div class="flex justify-between items-center mb-3">
           <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Registered Custom Resource Definitions (${crds.length})</h3>
