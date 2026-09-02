@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: console-hybrid-secrets
+  namespace: {{ .Release.Namespace }}
+type: Opaque
+stringData:
+  ADMIN_PASS: {{ .Values.secrets.adminPass | quote }}
+  FLASK_SECRET: {{ .Values.secrets.flaskSecret | quote }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: console-hybrid-app
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: console-hybrid-app
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: console-hybrid-app
+  template:
+    metadata:
+      labels:
+        app: console-hybrid-app
+    spec:
+      serviceAccountName: hybrid-intelligent-operator-sa
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values:
+                      - {{ .Values.targetNode }}
+      containers:
+        - name: go-operator
+          image: {{ .Values.registry }}/{{ .Release.Namespace }}/hybrid-operator:latest
+          imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+        - name: web-dashboard
+          image: {{ .Values.registry }}/{{ .Release.Namespace }}/dashboard:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: {{ .Values.dashboard.port }}
+              name: http
+          env:
+            - name: GO_INVENTORY_URL
+              value: "http://127.0.0.1:8080/api/v1/inventory"
+            - name: ADMIN_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: console-hybrid-secrets
+                  key: ADMIN_PASS
+            - name: FLASK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: console-hybrid-secrets
+                  key: FLASK_SECRET
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi

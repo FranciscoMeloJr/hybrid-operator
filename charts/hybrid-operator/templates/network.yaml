@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: console-hybrid-app
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    app: console-hybrid-app
+  ports:
+    - name: http
+      port: {{ .Values.dashboard.port }}
+      targetPort: {{ .Values.dashboard.port }}
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: console-hybrid-app
+  namespace: {{ .Release.Namespace }}
+spec:
+  to:
+    kind: Service
+    name: console-hybrid-app
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
