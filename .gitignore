@@ -10,3 +10,4 @@ operator/manager
 
 # 
 *.json
+values.yaml

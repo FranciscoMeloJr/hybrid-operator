@@ -1,0 +1,14 @@
+# Infrastructure Configuration
+targetNode: "YOUR_WORKER_NODE_HERE"
+replicaCount: 1
+
+# OpenShift Registry
+registry: "image-registry.openshift-image-registry.svc:5000"
+
+# Secret Keys & Credentials
+secrets:
+  adminPass: "CHANGE_ME_ADMIN_PASS"
+  flaskSecret: "CHANGE_ME_FLASK_SECRET"
+
+dashboard:
+  port: 5005

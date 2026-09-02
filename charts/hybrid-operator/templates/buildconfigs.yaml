@@ -1,0 +1,59 @@
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: hybrid-operator
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: dashboard
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: hybrid-operator
+  namespace: {{ .Release.Namespace }}
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: {{ .Values.targetNode }}
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  output:
+    to:
+      kind: ImageStreamTag
+      name: hybrid-operator:latest
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: dashboard
+  namespace: {{ .Release.Namespace }}
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: {{ .Values.targetNode }}
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  output:
+    to:
+      kind: ImageStreamTag
+      name: dashboard:latest
