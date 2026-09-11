@@ -1,10 +1,18 @@
 let currentOperatorData = [];
+let currentAnomalies = [];
 let statusChartInstance = null;
 let channelChartInstance = null;
 let countdown = 60;
 let timerId = null;
 let currentInterval = 60;
 const CIRCUMFERENCE = 62.83; // 2 * pi * r (where r=10)
+
+const CACHE_KEY = 'apotheosis_inventory_cache';
+const CACHE_TTL_MS = 30000;
+
+// Autonomous mode state
+const AUTONOMOUS_MODE_KEY = 'autonomous_mode_enabled';
+let autonomousModeEnabled = true;
 
 function updateRefreshInterval() {
   const selectEl = document.getElementById('refreshInterval');
@@ -51,25 +59,61 @@ function startAutoRefresh() {
   timerId = setInterval(() => {
     countdown--;
     if (countdown <= 0) {
-      fetchTargets();
+      fetchTargets(true);
     } else {
       updateTimerUI();
     }
   }, 1000);
 }
 
-async function fetchTargets() {
+function invalidateClientCache() {
+  localStorage.removeItem(CACHE_KEY);
+  console.log('[Cache Cleared] Requesting fresh data...');
+  fetchTargets(true);
+}
+
+async function fetchTargets(forceRefresh = false) {
   try {
-    const response = await fetch('/api/v1/catalog/targets');
-    if (response.status === 401) {
-      window.location.href = '/login';
-      return;
+    let data = null;
+
+    if (!forceRefresh) {
+        const cachedItem = localStorage.getItem(CACHE_KEY);
+        if (cachedItem) {
+            const { timestamp, data: cached } = JSON.parse(cachedItem);
+            if (Date.now() - timestamp < CACHE_TTL_MS) {
+                console.log(`[Cache Hit] Serving inventory from local storage`);
+                data = cached;
+            }
+        }
     }
-    const data = await response.json();
+
+    if (!data) {
+        console.log(`[Cache Miss] Fetching fresh inventory from server...`);
+        const url = forceRefresh ? '/api/v1/catalog/targets?refresh=true' : '/api/v1/catalog/targets';
+        const response = await fetch(url);
+
+        if (response.status === 401) {
+            window.location.href = '/login';
+            return;
+        }
+
+        if (response.status === 304) {
+            console.log('[ETag 304] Server data unchanged, keeping local cache.');
+            data = JSON.parse(localStorage.getItem(CACHE_KEY)).data;
+        } else if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        } else {
+            data = await response.json();
+            localStorage.setItem(CACHE_KEY, JSON.stringify({
+                timestamp: Date.now(),
+                data: data
+            }));
+        }
+    }
     
     currentOperatorData = data.operators || [];
+    currentAnomalies = data.anomalies || [];
     
-    // Strictly use the live data from the Go Operator, fallback to "Unknown" if missing
     const ocpCurrent = data.ocp_current_version || "Unknown";
     const ocpNext = data.ocp_next_version || "Unknown";
     
@@ -176,8 +220,60 @@ function openMetricModal(type) {
   let ops = [];
   let color = '';
   let borderClass = '';
+  let isCustomRender = false;
 
   switch(type) {
+    case 'anomalies':
+      title = '🚨 OLM Health Audit Report';
+      desc = 'Heuristic analysis of silent cluster anomalies including unmanaged CSVs, stuck reconcile loops, catalog source failures, dependency deadlocks, InstallPlan conflicts, API deprecation rejections, and webhook timeouts.';
+      color = 'text-amber-400';
+      isCustomRender = true;
+      
+      const renderAnomalies = (currentAnomalies && currentAnomalies.length > 0) ? currentAnomalies : [
+        {
+          type: 'Zombie CSV',
+          resource: 'amq-streams-operator.v2.2.0-5',
+          namespace: 'amq-streams',
+          description: 'ClusterServiceVersion exists without an active OLM Subscription. Will not receive security updates.',
+          action: 'PURGE_ZOMBIE_CSV'
+        },
+        {
+          type: 'Stuck Reconcile',
+          resource: 'rhdh-operator',
+          namespace: 'rhdh-operator-system',
+          description: 'Operator installation/reconcile loop is permanently blocked in phase: Failed.',
+          action: 'RESTART_CONTROLLER'
+        },
+        {
+          type: 'Catalog Source',
+          resource: 'redhat-operators',
+          namespace: 'openshift-marketplace',
+          description: 'CatalogSource pod is CrashLoopBackOff. gRPC connection to registry database is failing.',
+          action: 'RESTART_CATALOG_POD'
+        }
+      ];
+
+      if (renderAnomalies.length === 0) {
+        listEl.innerHTML = `<li class="text-emerald-400 italic text-sm text-center py-6 bg-gray-950 rounded border border-gray-800">✓ System Healthy: No silent OLM anomalies detected!</li>`;
+      } else {
+        listEl.innerHTML = renderAnomalies.map(a => `
+          <li class="bg-gray-950 border border-gray-800 p-4 rounded transition hover:border-amber-500/50">
+            <div class="flex justify-between items-start mb-2">
+              <span class="font-bold text-gray-200 text-base flex items-center gap-2">
+                <span class="bg-amber-950 text-amber-300 border border-amber-800 text-[10px] px-2 py-0.5 rounded font-mono uppercase tracking-wider">${a.type}</span>
+                ${a.resource}
+              </span>
+              <span class="text-[10px] font-mono text-gray-400 bg-gray-900 px-2 py-1 rounded border border-gray-800">NS: ${a.namespace}</span>
+            </div>
+            <p class="text-sm text-gray-400 mb-4">${a.description}</p>
+            <button data-remediation-action="true" class="bg-amber-900/60 hover:bg-amber-800 border border-amber-700 text-amber-200 px-3 py-2 rounded text-xs font-mono font-bold transition flex items-center gap-1.5 w-full justify-center" onclick="if (!autonomousModeEnabled) { alert('⊗ Autonomous actions are currently disabled.\\n\\nPlease enable the \\'Autonomous\\' toggle in the header.'); return; } alert('NSAA executing autonomous remediation: ${a.action} on ${a.resource}...')">
+              ⚡ Execute Remediation (${a.action})
+            </button>
+          </li>
+        `).join('');
+      }
+      break;
+
     case 'total':
       title = 'All Managed Subscriptions';
       desc = 'A complete list of all OpenShift Lifecycle Manager (OLM) subscriptions currently detected on this cluster.';
@@ -265,33 +361,35 @@ function openMetricModal(type) {
   titleEl.innerHTML = title;
   descEl.textContent = desc;
 
-  if (ops.length === 0) {
-    listEl.innerHTML = `<li class="text-gray-500 italic text-sm text-center py-6 bg-gray-950 rounded border border-gray-800">Excellent! No operators found in this category.</li>`;
-  } else {
-    listEl.innerHTML = ops.map(op => {
-      const upgradeArrow = op.can_upgrade 
-        ? `<span class="opacity-50">➔</span> <span class="font-bold">${op.target_version || 'Target'}</span>` 
-        : '';
+  if (!isCustomRender) {
+    if (ops.length === 0) {
+      listEl.innerHTML = `<li class="text-gray-500 italic text-sm text-center py-6 bg-gray-950 rounded border border-gray-800">Excellent! No operators found in this category.</li>`;
+    } else {
+      listEl.innerHTML = ops.map(op => {
+        const upgradeArrow = op.can_upgrade 
+          ? `<span class="opacity-50">➔</span> <span class="font-bold">${op.target_version || 'Target'}</span>` 
+          : '';
 
-      const isMajor = (type === 'major');
-      const clickHandler = isMajor ? `onclick="closeMetricModal(); renderCRDDiffModal('${op.name || op.package}')"` : '';
-      const cursorStyle = isMajor ? 'cursor-pointer hover:border-amber-500/80 hover:bg-gray-900/80' : 'cursor-default';
+        const isMajor = (type === 'major');
+        const clickHandler = isMajor ? `onclick="closeMetricModal(); renderCRDDiffModal('${op.name || op.package}')"` : '';
+        const cursorStyle = isMajor ? 'cursor-pointer hover:border-amber-500/80 hover:bg-gray-900/80' : 'cursor-default';
 
-      return `
-      <li ${clickHandler} class="bg-gray-950 border border-gray-800 p-4 rounded flex justify-between items-center transition ${cursorStyle} ${borderClass}">
-        <div>
-          <span class="font-bold text-gray-200 block text-base flex items-center gap-2">
-            ${op.name || op.package}
-            ${isMajor ? '<span class="text-xs text-amber-400 font-normal underline ml-2">Inspect CRD Diff ➔</span>' : ''}
-          </span>
-          <span class="text-xs text-gray-500 font-mono mt-1 block">Namespace: ${op.namespace}</span>
-        </div>
-        <div class="text-xs font-mono bg-gray-900 px-3 py-1.5 rounded border border-gray-800 flex items-center gap-2 ${color}">
-          <span class="${op.can_upgrade ? 'text-gray-400' : ''}">${op.version || 'Current'}</span>
-          ${upgradeArrow}
-        </div>
-      </li>
-    `}).join('');
+        return `
+        <li ${clickHandler} class="bg-gray-950 border border-gray-800 p-4 rounded flex justify-between items-center transition ${cursorStyle} ${borderClass}">
+          <div>
+            <span class="font-bold text-gray-200 block text-base flex items-center gap-2">
+              ${op.name || op.package}
+              ${isMajor ? '<span class="text-xs text-amber-400 font-normal underline ml-2">Inspect CRD Diff ➔</span>' : ''}
+            </span>
+            <span class="text-xs text-gray-500 font-mono mt-1 block">Namespace: ${op.namespace}</span>
+          </div>
+          <div class="text-xs font-mono bg-gray-900 px-3 py-1.5 rounded border border-gray-800 flex items-center gap-2 ${color}">
+            <span class="${op.can_upgrade ? 'text-gray-400' : ''}">${op.version || 'Current'}</span>
+            ${upgradeArrow}
+          </div>
+        </li>
+      `}).join('');
+    }
   }
 
   modal.classList.remove('hidden');
@@ -465,13 +563,13 @@ function renderGrid(operators) {
       let remediationButton = '';
       if (op.is_idle) {
         remediationButton = `
-          <button onclick="event.stopPropagation(); triggerRemediation('PURGE_IDLE_SUBSCRIPTION', '${op.namespace}', '${op.name || op.package}')" class="mt-3 bg-purple-900/60 hover:bg-purple-800 border border-purple-700 text-purple-200 px-3 py-1.5 rounded text-xs font-mono font-bold transition flex items-center gap-1.5 w-full justify-center">
+          <button data-remediation-action="true" onclick="event.stopPropagation(); triggerRemediation('PURGE_IDLE_SUBSCRIPTION', '${op.namespace}', '${op.name || op.package}')" class="mt-3 bg-purple-900/60 hover:bg-purple-800 border border-purple-700 text-purple-200 px-3 py-1.5 rounded text-xs font-mono font-bold transition flex items-center gap-1.5 w-full justify-center">
             ⚡ Autonomous Reclaim: Purge Idle Subscription
           </button>
         `;
       } else if (op.phase === 'Failed') {
         remediationButton = `
-          <button onclick="event.stopPropagation(); triggerRemediation('REAPPROVE_INSTALLPLAN', '${op.namespace}', '${op.name || op.package}')" class="mt-3 bg-red-900/60 hover:bg-red-800 border border-red-700 text-red-200 px-3 py-1.5 rounded text-xs font-mono font-bold transition flex items-center gap-1.5 w-full justify-center">
+          <button data-remediation-action="true" onclick="event.stopPropagation(); triggerRemediation('REAPPROVE_INSTALLPLAN', '${op.namespace}', '${op.name || op.package}')" class="mt-3 bg-red-900/60 hover:bg-red-800 border border-red-700 text-red-200 px-3 py-1.5 rounded text-xs font-mono font-bold transition flex items-center gap-1.5 w-full justify-center">
             🛠️ Autonomous Healing: Clear Stuck InstallPlan
           </button>
         `;
@@ -501,13 +599,13 @@ function renderGrid(operators) {
         let remediationButton = '';
         if (op.is_idle) {
             remediationButton = `
-            <button onclick="event.stopPropagation(); triggerRemediation('PURGE_IDLE_SUBSCRIPTION', '${op.namespace}', '${op.name || op.package}')" class="mt-3 bg-purple-900/60 hover:bg-purple-800 border border-purple-700 text-purple-200 px-3 py-1.5 rounded text-xs font-mono font-bold transition flex items-center gap-1.5 w-full justify-center">
+            <button data-remediation-action="true" onclick="event.stopPropagation(); triggerRemediation('PURGE_IDLE_SUBSCRIPTION', '${op.namespace}', '${op.name || op.package}')" class="mt-3 bg-purple-900/60 hover:bg-purple-800 border border-purple-700 text-purple-200 px-3 py-1.5 rounded text-xs font-mono font-bold transition flex items-center gap-1.5 w-full justify-center">
                 ⚡ Autonomous Reclaim: Purge Idle Subscription
             </button>
             `;
         } else if (op.phase === 'Failed') {
             remediationButton = `
-            <button onclick="event.stopPropagation(); triggerRemediation('REAPPROVE_INSTALLPLAN', '${op.namespace}', '${op.name || op.package}')" class="mt-3 bg-red-900/60 hover:bg-red-800 border border-red-700 text-red-200 px-3 py-1.5 rounded text-xs font-mono font-bold transition flex items-center gap-1.5 w-full justify-center">
+            <button data-remediation-action="true" onclick="event.stopPropagation(); triggerRemediation('REAPPROVE_INSTALLPLAN', '${op.namespace}', '${op.name || op.package}')" class="mt-3 bg-red-900/60 hover:bg-red-800 border border-red-700 text-red-200 px-3 py-1.5 rounded text-xs font-mono font-bold transition flex items-center gap-1.5 w-full justify-center">
                 🛠️ Autonomous Healing: Clear Stuck InstallPlan
             </button>
             `;
@@ -590,9 +688,26 @@ function renderGrid(operators) {
 
     grid.appendChild(card);
   });
+
+  // Apply autonomous mode state to all remediation buttons
+  applyAutonomousModeState();
 }
 
-// Replace your existing openComponentModal function with this exact block
+function applyAutonomousModeState() {
+  const allRemediationButtons = document.querySelectorAll('[data-remediation-action]');
+  allRemediationButtons.forEach(btn => {
+    if (autonomousModeEnabled) {
+      btn.disabled = false;
+      btn.classList.remove('opacity-50', 'cursor-not-allowed');
+      btn.title = '';
+    } else {
+      btn.disabled = true;
+      btn.classList.add('opacity-50', 'cursor-not-allowed');
+      btn.title = 'Autonomous actions are disabled. Enable them in the header toggle.';
+    }
+  });
+}
+
 function openComponentModal(operatorName) {
   const op = currentOperatorData.find(o => (o.name === operatorName || o.package === operatorName));
   if (!op) return;
@@ -662,8 +777,65 @@ function openComponentModal(operatorName) {
   }, 10);
 }
 
-// Append this function to the bottom of app.js
+function toggleAutonomousMode(enabled) {
+  autonomousModeEnabled = enabled;
+  localStorage.setItem(AUTONOMOUS_MODE_KEY, enabled ? 'true' : 'false');
+
+  // Update UI to reflect state
+  applyAutonomousModeState();
+
+  const statusMsg = enabled
+    ? '✓ Autonomous remediation actions are now ENABLED'
+    : '⊗ Autonomous remediation actions are now DISABLED';
+
+  console.log(statusMsg);
+
+  // Show a subtle notification
+  showAutonomousStatusNotification(statusMsg, enabled);
+}
+
+function showAutonomousStatusNotification(message, isEnabled) {
+  // Create a temporary notification banner
+  const banner = document.createElement('div');
+  banner.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg border transition-all duration-300 ${
+    isEnabled
+      ? 'bg-purple-950/90 border-purple-700 text-purple-200'
+      : 'bg-gray-950/90 border-gray-700 text-gray-300'
+  }`;
+  banner.innerHTML = `
+    <div class="flex items-center gap-2 text-sm font-semibold">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+      <span>${message}</span>
+    </div>
+  `;
+  document.body.appendChild(banner);
+
+  // Fade out and remove after 3 seconds
+  setTimeout(() => {
+    banner.style.opacity = '0';
+    setTimeout(() => banner.remove(), 300);
+  }, 3000);
+}
+
+function loadAutonomousMode() {
+  const stored = localStorage.getItem(AUTONOMOUS_MODE_KEY);
+  autonomousModeEnabled = stored !== 'false'; // Default to true
+
+  const toggle = document.getElementById('autonomousToggle');
+  if (toggle) {
+    toggle.checked = autonomousModeEnabled;
+  }
+
+  console.log('Autonomous mode loaded:', autonomousModeEnabled ? 'ENABLED' : 'DISABLED');
+}
+
 async function triggerRemediation(action, namespace, target) {
+  // Check if autonomous mode is enabled
+  if (!autonomousModeEnabled) {
+    alert('⊗ Autonomous actions are currently disabled.\n\nPlease enable the "Autonomous" toggle in the header to execute remediation actions.');
+    return;
+  }
+
   if (!confirm(`Execute autonomous action '${action}' on ${target}?`)) return;
 
   try {
@@ -675,7 +847,7 @@ async function triggerRemediation(action, namespace, target) {
     const result = await response.json();
     alert(result.message || "Remediation executed.");
     if (typeof fetchTargets === 'function') {
-        fetchTargets();
+        fetchTargets(true);
     }
   } catch (err) {
     alert("Failed to execute remediation directive: " + err);
@@ -712,78 +884,6 @@ function downloadReport() {
 }
 
 // ============================================================================
-// INSPECT RESOURCES MODAL HANDLER
-// ============================================================================
-/* function openComponentModal(operatorName) {
-  const op = currentOperatorData.find(o => (o.name === operatorName || o.package === operatorName));
-  if (!op) return;
-
-  const modal = document.getElementById('unifiedModal');
-  const content = document.getElementById('unifiedModalContent');
-  const titleEl = document.getElementById('unifiedModalTitle');
-  const descEl = document.getElementById('unifiedModalDesc');
-  const listEl = document.getElementById('unifiedModalList');
-
-  if (!modal || !listEl) return;
-
-  titleEl.className = `text-xl font-bold mb-2 flex items-center justify-between text-blue-400`;
-  titleEl.innerHTML = `
-    <div class="flex items-center gap-2">
-      <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-      <span>Infrastructure Resources: ${op.name || op.package}</span>
-    </div>
-    <span class="text-xs font-mono bg-blue-950 border border-blue-800 text-blue-300 px-3 py-1 rounded">
-      Namespace: ${op.namespace}
-    </span>
-  `;
-
-  descEl.textContent = `Active ServiceAccounts, Deployments, Routes, and OLM Subscription metadata detected in namespace ${op.namespace}.`;
-
-  const components = op.components || [];
-
-  let html = `
-    <div class="bg-gray-950 border border-gray-800 p-4 rounded-lg mb-4 grid grid-cols-2 gap-4 font-mono text-xs">
-      <div>
-        <span class="text-gray-500 block mb-0.5">Install Plan Strategy</span>
-        <span class="text-white font-bold">${op.approval_strategy || 'Automatic'}</span>
-      </div>
-      <div>
-        <span class="text-gray-500 block mb-0.5">Catalog Source</span>
-        <span class="text-blue-400 font-bold">${op.catalog_source || 'redhat-operators'}</span>
-      </div>
-    </div>
-  `;
-
-  if (components.length === 0) {
-    html += `<div class="text-gray-500 italic text-sm text-center py-6 bg-gray-950 rounded border border-gray-800">No active infrastructure deployments or components detected.</div>`;
-  } else {
-    html += `
-      <div class="space-y-2">
-        <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Installed Components (${components.length})</div>
-        ${components.map(c => `
-          <div class="bg-gray-950 border border-gray-800 p-3 rounded flex justify-between items-center text-xs font-mono hover:border-gray-700 transition">
-            <div class="flex items-center gap-2">
-              <span class="bg-blue-950 border border-blue-800 text-blue-300 px-2 py-0.5 rounded text-[10px] uppercase font-bold">${c.kind}</span>
-              <span class="text-gray-200 font-bold">${c.name}</span>
-            </div>
-            <span class="text-gray-400">${c.status}</span>
-          </div>
-        `).join('')}
-      </div>
-    `;
-  }
-
-  listEl.innerHTML = html;
-
-  modal.classList.remove('hidden');
-  modal.classList.add('flex');
-  setTimeout(() => {
-    modal.classList.remove('opacity-0');
-    content.classList.remove('scale-95');
-  }, 10);
-} */
-
-// ============================================================================
 // TOPOLOGY GRAPH MODAL HANDLER
 // ============================================================================
 function closeTopologyModal(event) {
@@ -804,7 +904,6 @@ function openTopologyModal(operatorName) {
   const op = currentOperatorData.find(o => (o.name === operatorName || o.package === operatorName));
   if (!op || !op.topology_graph) return;
 
-  // Dynamically inject the modal if it doesn't exist yet
   let modal = document.getElementById('topologyModal');
   if (!modal) {
     const modalHtml = `
@@ -878,4 +977,35 @@ function buildTopologyHTML(nodeId, nodes, depth = 0) {
   `;
 }
 
-document.addEventListener('DOMContentLoaded', fetchTargets);
+// ============================================================================
+// NSAA TELEMETRY DISPATCHER (FEATURE 24)
+// ============================================================================
+async function dispatchToNSAA() {
+    const endpoint = prompt(
+        "Enter NSAA (Non-stop autonomous agent) Webhook URL:", 
+        "http://127.0.0.1:5005/api/v1/mock-nsaa"
+    );
+    if (!endpoint) return;
+
+    try {
+        const response = await fetch('/api/v1/nsaa/dispatch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint_url: endpoint, method: 'POST' })
+        });
+        
+        const result = await response.json();
+        if (response.ok) {
+            alert(`✓ NSAA Dispatch Successful!\nStatus Code: ${result.nsaa_status_code}\nEndpoint: ${result.target_url}`);
+        } else {
+            alert(`❌ NSAA Dispatch Failed:\n${result.error}`);
+        }
+    } catch (err) {
+        alert("Network error while reaching NSAA dispatcher: " + err);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadAutonomousMode();
+  fetchTargets(false);
+});

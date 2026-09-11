@@ -50,6 +50,16 @@ var (
         Version:  "v1",
         Resource: "deployments",
     }
+    installPlanGVR = schema.GroupVersionResource{
+        Group:    "operators.coreos.com",
+        Version:  "v1alpha1",
+        Resource: "installplans",
+    }
+    catalogSourceGVR = schema.GroupVersionResource{
+        Group:    "operators.coreos.com",
+        Version:  "v1alpha1",
+        Resource: "catalogsources",
+    }
 )
 
 type CRDInfo struct {
@@ -97,11 +107,21 @@ type OperatorInfo struct {
     RiskScore        int                 `json:"risk_score"`
 }
 
+type AnomalyInfo struct {
+    Type        string `json:"type"`
+    Severity    string `json:"severity"`
+    Resource    string `json:"resource"`
+    Namespace   string `json:"namespace"`
+    Description string `json:"description"`
+    Action      string `json:"action"`
+}
+
 type ClusterGovernanceResponse struct {
     OCPCurrentVersion string         `json:"ocp_current_version"`
     OCPNextVersion    string         `json:"ocp_next_version"`
     Operators         []OperatorInfo `json:"operators"`
     Total             int            `json:"total"`
+    Anomalies         []AnomalyInfo  `json:"anomalies"`
 }
 
 func parseSemver(versionStr string) [3]int {
@@ -227,6 +247,9 @@ func GetClusterGovernance(ctx context.Context, dynClient dynamic.Interface) (Clu
     if err != nil {
         return ClusterGovernanceResponse{}, fmt.Errorf("failed to list subscriptions: %w", err)
     }
+
+    ips, _ := dynClient.Resource(installPlanGVR).List(ctx, metav1.ListOptions{})
+    catsrcs, _ := dynClient.Resource(catalogSourceGVR).List(ctx, metav1.ListOptions{})
 
     var results []OperatorInfo
 
@@ -463,10 +486,161 @@ func GetClusterGovernance(ctx context.Context, dynClient dynamic.Interface) (Clu
         results = append(results, op)
     }
 
+    anomalies := DetectAnomalies(subs, ips, csvs, catsrcs)
+
     return ClusterGovernanceResponse{
         OCPCurrentVersion: ocpCurrent,
         OCPNextVersion:    ocpNext,
         Operators:         results,
         Total:             len(results),
+        Anomalies:         anomalies,
     }, nil
+}
+
+func DetectAnomalies(
+    subs *unstructured.UnstructuredList,
+    ips *unstructured.UnstructuredList,
+    csvs *unstructured.UnstructuredList,
+    catsrcs *unstructured.UnstructuredList,
+) []AnomalyInfo {
+    var anomalies []AnomalyInfo
+
+    subMap := make(map[string]bool)
+
+    // 1. Dependency Deadlocks (Subscriptions failing resolution)
+    if subs != nil {
+        for _, sub := range subs.Items {
+            subKey := sub.GetNamespace() + "/" + sub.GetName()
+            subMap[subKey] = true
+
+            status, ok := sub.Object["status"].(map[string]interface{})
+            if ok {
+                conditions, hasCond := status["conditions"].([]interface{})
+                if hasCond {
+                    for _, c := range conditions {
+                        cond, isMap := c.(map[string]interface{})
+                        if isMap && cond["reason"] == "ResolutionFailed" && cond["status"] == "True" {
+                            msg, _ := cond["message"].(string)
+                            anomalies = append(anomalies, AnomalyInfo{
+                                Type:        "Dependency Deadlock",
+                                Severity:    "CRITICAL",
+                                Resource:    sub.GetName(),
+                                Namespace:   sub.GetNamespace(),
+                                Description: "Subscription cannot resolve dependencies: " + msg,
+                                Action:      "VERIFY_CATALOG_SOURCES",
+                            })
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. InstallPlan Step Conflicts
+    if ips != nil {
+        for _, ip := range ips.Items {
+            status, ok := ip.Object["status"].(map[string]interface{})
+            if ok {
+                phase, _ := status["phase"].(string)
+                if phase == "Failed" {
+                    conditions, hasCond := status["conditions"].([]interface{})
+                    if hasCond {
+                        for _, c := range conditions {
+                            cond, isMap := c.(map[string]interface{})
+                            if isMap && cond["type"] == "Installed" && cond["status"] == "False" && cond["reason"] == "InstallCheckFailed" {
+                                anomalies = append(anomalies, AnomalyInfo{
+                                    Type:        "InstallPlan Conflict",
+                                    Severity:    "CRITICAL",
+                                    Resource:    ip.GetName(),
+                                    Namespace:   ip.GetNamespace(),
+                                    Description: "InstallPlan failed due to ownership conflicts or step failure.",
+                                    Action:      "DELETE_CONFLICTING_RESOURCE",
+                                })
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Webhook Timeouts, API Deprecations, and Zombie CSVs
+    if csvs != nil {
+        for _, csv := range csvs.Items {
+            name := csv.GetName()
+            ns := csv.GetNamespace()
+
+            // Skip global OLM namespaces for zombie check
+            if ns != "openshift-operator-lifecycle-manager" && ns != "openshift-marketplace" && !strings.HasPrefix(ns, "openshift-") {
+                hasParentSub := false
+                for k := range subMap {
+                    if strings.HasPrefix(k, ns+"/") {
+                        hasParentSub = true
+                        break
+                    }
+                }
+                
+                if !hasParentSub {
+                    anomalies = append(anomalies, AnomalyInfo{
+                        Type:        "Zombie CSV",
+                        Severity:    "WARNING",
+                        Resource:    name,
+                        Namespace:   ns,
+                        Description: "ClusterServiceVersion exists without an active parent OLM Subscription.",
+                        Action:      "PURGE_ZOMBIE_CSV",
+                    })
+                }
+            }
+
+            status, ok := csv.Object["status"].(map[string]interface{})
+            if ok {
+                reason, _ := status["reason"].(string)
+                
+                if reason == "APIServiceResourceIssue" || reason == "RequirementsNotMet" {
+                    anomalies = append(anomalies, AnomalyInfo{
+                        Type:        "Webhook/API Timeout",
+                        Severity:    "WARNING",
+                        Resource:    name,
+                        Namespace:   ns,
+                        Description: "CSV is stuck waiting for APIService or Webhook requirement.",
+                        Action:      "RESTART_OPERATOR_POD",
+                    })
+                } else if reason == "UnpackFailed" || reason == "UnsupportedAPI" {
+                    anomalies = append(anomalies, AnomalyInfo{
+                        Type:        "API Deprecation Rejection",
+                        Severity:    "CRITICAL",
+                        Resource:    name,
+                        Namespace:   ns,
+                        Description: "CSV contains deprecated Kubernetes API resources no longer supported in this OCP version.",
+                        Action:      "CHANGE_SUBSCRIPTION_CHANNEL",
+                    })
+                }
+            }
+        }
+    }
+
+    // 4. Catalog Source Failures
+    if catsrcs != nil {
+        for _, cs := range catsrcs.Items {
+            status, ok := cs.Object["status"].(map[string]interface{})
+            if ok {
+                connState, hasState := status["connectionState"].(map[string]interface{})
+                if hasState {
+                    lastState, _ := connState["lastObservedState"].(string)
+                    if lastState != "READY" {
+                        anomalies = append(anomalies, AnomalyInfo{
+                            Type:        "Catalog Source",
+                            Severity:    "CRITICAL",
+                            Resource:    cs.GetName(),
+                            Namespace:   cs.GetNamespace(),
+                            Description: "CatalogSource gRPC connection is failing or pod is CrashLoopBackOff. State: " + lastState,
+                            Action:      "RESTART_CATALOG_POD",
+                        })
+                    }
+                }
+            }
+        }
+    }
+
+    return anomalies
 }

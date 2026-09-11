@@ -1,10 +1,12 @@
 import os
+import hashlib
+import json
 import secrets
 import datetime
 import logging
 import requests
 from functools import wraps
-from flask import Flask, jsonify, request, send_from_directory, render_template, render_template_string, redirect, url_for, session
+from flask import Flask, jsonify, request, send_from_directory, render_template, render_template_string, redirect, url_for, session, make_response
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("brain-service")
@@ -18,6 +20,7 @@ app.permanent_session_lifetime = datetime.timedelta(minutes=30)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 GO_INVENTORY_URL = os.getenv("GO_INVENTORY_URL", "http://127.0.0.1:8080/api/v1/inventory")
+NSAA_DEFAULT_ENDPOINT = os.getenv("NSAA_ENDPOINT_URL", "http://nsaa-agent-service.nsaa-system.svc:8000/api/v1/telemetry")
 
 # =============================================================================
 # AUTHENTICATION MIDDLEWARE & LOGIN ROUTES
@@ -115,12 +118,60 @@ def serve_ui_assets(filename):
 @app.route('/api/v1/catalog/targets')
 @requires_auth
 def get_targets():
+    force_refresh = request.args.get('refresh', 'false').lower() == 'true'
     try:
         res = requests.get(GO_INVENTORY_URL, timeout=3)
+        if res.status_code == 200:
+            try:
+                raw_data = res.json()
+                payload_str = json.dumps(raw_data, sort_keys=True)
+                etag = hashlib.md5(payload_str.encode('utf-8')).hexdigest()
+                
+                if not force_refresh and request.headers.get('If-None-Match') == etag:
+                    return '', 304
+                    
+                response = make_response(jsonify(raw_data))
+                response.headers['ETag'] = etag
+                response.headers['Cache-Control'] = 'private, no-cache'
+                return response
+            except Exception:
+                pass
+
         return (res.content, res.status_code, [("Content-Type", "application/json")])
     except Exception as e:
         logger.error(f"Failed to fetch inventory from local Go operator: {e}")
         return jsonify({"error": f"Failed to reach local Go operator: {str(e)}", "operators": []}), 502
+
+@app.route('/api/v1/nsaa/dispatch', methods=['POST'])
+@requires_auth
+def dispatch_to_nsaa():
+    req_payload = request.get_json() or {}
+    target_url = req_payload.get('endpoint_url') or NSAA_DEFAULT_ENDPOINT
+    http_method = req_payload.get('method', 'POST').upper()
+
+    try:
+        # Pull live local data first to ensure payload is current
+        res = requests.get(GO_INVENTORY_URL, timeout=5)
+        inventory_data = res.json() if res.status_code == 200 else {}
+    except Exception as e:
+        return jsonify({"error": f"Failed to fetch local inventory for dispatch: {str(e)}"}), 502
+
+    try:
+        if http_method == 'GET':
+            nsaa_res = requests.get(target_url, params={"data": json.dumps(inventory_data)}, timeout=5)
+        else:
+            nsaa_res = requests.post(target_url, json=inventory_data, headers={"Content-Type": "application/json"}, timeout=5)
+
+        logger.info(f"Dispatched telemetry to NSAA ({target_url}) - Status: {nsaa_res.status_code}")
+        return jsonify({
+            "status": "Success",
+            "nsaa_status_code": nsaa_res.status_code,
+            "target_url": target_url,
+            "message": "Successfully forwarded governance JSON payload to NSAA."
+        })
+    except Exception as e:
+        logger.error(f"Failed to dispatch telemetry to NSAA at {target_url}: {e}")
+        return jsonify({"error": f"Failed to connect to NSAA endpoint: {str(e)}"}), 502
 
 @app.route('/help')
 @requires_auth
@@ -154,6 +205,15 @@ def handle_remediation():
         "target": target,
         "message": f"Autonomous action '{action}' executed successfully on {target} in namespace {namespace}."
     })
-    
+
+@app.route('/api/v1/mock-nsaa', methods=['POST'])
+def mock_nsaa_receiver():
+    data = request.get_json() or {}
+    logger.info("=== [MOCK NSAA RECEIVER] INCOMING TELEMETRY PAYLOAD ===")
+    logger.info(json.dumps(data, indent=2))
+    logger.info(f"Total Operators Received: {len(data.get('operators', []))}")
+    logger.info("=====================================================")
+    return jsonify({"status": "Received", "message": "Telemetry processed by mock agent"}), 200
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5005, debug=True)

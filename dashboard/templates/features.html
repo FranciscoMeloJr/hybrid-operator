@@ -16,7 +16,7 @@
       <div>
         <div class="flex items-center gap-3">
           <h1 class="text-2xl font-bold text-white">Hybrid Operator Roadmap</h1>
-          <span class="bg-blue-900/50 border border-blue-700 text-blue-300 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Last Updated: August 2026</span>
+          <span class="bg-blue-900/50 border border-blue-700 text-blue-300 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Last Updated: September 2026</span>
         </div>
         <p class="text-sm text-gray-400 mt-1">Feature Backlog & Implementation Status Matrix</p>
       </div>
@@ -26,7 +26,7 @@
       <a href="/" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded shadow transition text-sm font-medium">
         Back to Console
       </a>
-      <a href="/help" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-2 rounded shadow transition text-sm font-medium">
+      <a href="/help" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-2 rounded shadow transition text-sm font-medium border border-gray-700">
         Help
       </a>
     </div>
@@ -98,7 +98,7 @@
             </td>
             <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">3 SP</td>
             <td class="px-4 py-4 text-xs">Header badges updated dynamically in <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">index.html</code> and <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">app.js</code>.</td>
-            <td class="px-4 py-4 text-xs">Added <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">GetClusterGovernance()</code> to <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">collector.go</code> and updated <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">main.go</code> to handle <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">[]collector.OperatorInfo</code> safely.</td>
+            <td class="px-4 py-4 text-xs">Added <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">GetClusterGovernance()</code> to <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">collector.go</code> and updated <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">main.go</code>.</td>
           </tr>
 
           <!-- Feature 5 -->
@@ -123,7 +123,7 @@
               <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
             </td>
             <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">2 SP</td>
-            <td class="px-4 py-4 text-xs">Added grid of 4 metric summary cards above the operator grid.</td>
+            <td class="px-4 py-4 text-xs">Added grid of metric summary cards above the operator grid.</td>
             <td class="px-4 py-4 text-xs">Driven client-side from <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/api/v1/catalog/targets</code> JSON payload.</td>
           </tr>
 
@@ -149,7 +149,7 @@
               <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
             </td>
             <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">1 SP</td>
-            <td class="px-4 py-4 text-xs">Added <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/help</code> and <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/features</code> Flask routes and HTML templates.</td>
+            <td class="px-4 py-4 text-xs">Added <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/help</code> and <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/features</code> Flask routes and templates.</td>
             <td class="px-4 py-4 text-xs text-gray-500 italic">None</td>
           </tr>
 
@@ -163,7 +163,7 @@
             </td>
             <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">3 SP</td>
             <td class="px-4 py-4 text-xs">Add "Est. Maintenance Duration" metric card and subtext breakdown on dashboard.</td>
-            <td class="px-4 py-4 text-xs">Add <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">calculateUpgradeTime()</code> heuristic engine evaluating worker node rollout + CSV reconcile + pod restart deltas.</td>
+            <td class="px-4 py-4 text-xs">Add heuristic engine evaluating worker node rollout + CSV reconcile + pod restart deltas.</td>
           </tr>
 
           <!-- Feature 10 -->
@@ -175,8 +175,8 @@
               <span class="bg-gray-800 border border-gray-700 text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Planned</span>
             </td>
             <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">5 SP</td>
-            <td class="px-4 py-4 text-xs">Add <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">$ / mo</code> cost badges and compute/storage cost breakdown bar on cards.</td>
-            <td class="px-4 py-4 text-xs">Go collector fetches container CPU/RAM requests; Python Brain applies pricing unit rates.</td>
+            <td class="px-4 py-4 text-xs">Add cost badges and compute/storage cost breakdown bar on cards.</td>
+            <td class="px-4 py-4 text-xs">Go collector fetches container CPU/RAM requests; Python Brain applies pricing rates.</td>
           </tr>
 
           <!-- Feature 11 -->
@@ -188,7 +188,7 @@
               <span class="bg-gray-800 border border-gray-700 text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Planned</span>
             </td>
             <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">5 SP</td>
-            <td class="px-4 py-4 text-xs">Display resource delta (<code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">+vCPU/RAM</code>) and projected cost change (<code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">+$ / mo</code>) in card drawer.</td>
+            <td class="px-4 py-4 text-xs">Display resource delta (<code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">+vCPU/RAM</code>) and cost change in drawer.</td>
             <td class="px-4 py-4 text-xs">Python Brain parses target CSV deployment spec and checks node capacity headroom.</td>
           </tr>
 
@@ -241,7 +241,7 @@
             </td>
             <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">8 SP</td>
             <td class="px-4 py-4 text-xs">Header OCP current vs target badges and blocker recommendation banners on cards.</td>
-            <td class="px-4 py-4 text-xs">Queries <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">ClusterVersion</code> in <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">collector.go</code> and calculates target OCP minor version readiness.</td>
+            <td class="px-4 py-4 text-xs">Queries <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">ClusterVersion</code> in <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">collector.go</code> and calculates readiness.</td>
           </tr>
 
           <!-- Feature 16 -->
@@ -276,7 +276,7 @@
             <td class="px-4 py-4 font-bold text-white">Helm Chart Deployment</td>
             <td class="px-4 py-4 text-gray-400">Package framework into a standardized Helm chart.</td>
             <td class="px-4 py-4">
-              <span class="bg-gray-800 border border-gray-700 text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Planned</span>
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
             </td>
             <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">3 SP</td>
             <td class="px-4 py-4 text-xs text-gray-500 italic">None</td>
@@ -333,6 +333,45 @@
             <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">3 SP</td>
             <td class="px-4 py-4 text-xs">Added "External Routes" metric card and route detail modal list view.</td>
             <td class="px-4 py-4 text-xs">Added OpenShift Route GVR scanner (<code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">route.openshift.io/v1</code>) per operator namespace in <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">collector.go</code>.</td>
+          </tr>
+
+          <!-- Feature 23 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">23</td>
+            <td class="px-4 py-4 font-bold text-white">Multi-Tier Caching Engine</td>
+            <td class="px-4 py-4 text-gray-400">Accelerate load times and reduce OpenShift API calls with memory and browser caching.</td>
+            <td class="px-4 py-4">
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">5 SP</td>
+            <td class="px-4 py-4 text-xs">Added LocalStorage TTL caching and cache invalidation UI.</td>
+            <td class="px-4 py-4 text-xs">Implemented <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">sync.RWMutex</code> Go cache and Flask ETag 304 Not Modified responses.</td>
+          </tr>
+
+          <!-- Feature 24 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">24</td>
+            <td class="px-4 py-4 font-bold text-white">NSAA Telemetry Dispatcher</td>
+            <td class="px-4 py-4 text-gray-400">Push live OLM governance JSON payloads to the Non-stop autonomous agent (NSAA). Currently manual; target state is seamless event-driven sync.</td>
+            <td class="px-4 py-4">
+              <span class="bg-amber-950 border border-amber-800 text-amber-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Partially Done</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">3 SP</td>
+            <td class="px-4 py-4 text-xs">Added "Sync to NSAA" manual trigger. <em class="text-gray-500 mt-1 block">(Pending: Seamless auto-sync review/approve UI)</em></td>
+            <td class="px-4 py-4 text-xs">Added <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/api/v1/nsaa/dispatch</code> endpoint. <em class="text-gray-500 mt-1 block">(Pending: Go Informer background sync loop)</em></td>
+          </tr>
+
+          <!-- Feature 25 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">25</td>
+            <td class="px-4 py-4 font-bold text-white">OLM Anomaly Detection & Audit Report</td>
+            <td class="px-4 py-4 text-gray-400">Heuristic engine scanning for Zombie CSVs, stuck reconciles, Catalog Source failures, dependency deadlocks, InstallPlan step conflicts, and webhook/API timeouts.</td>
+            <td class="px-4 py-4">
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">8 SP</td>
+            <td class="px-4 py-4 text-xs">Added "OLM Health Audit" card, auto-report toggle switch, and interactive remediation modal view in <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">app.js</code>.</td>
+            <td class="px-4 py-4 text-xs">Implemented <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">DetectAnomalies()</code> in Go evaluating <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">Status.Conditions</code> across Subscriptions, InstallPlans, CSVs, and CatalogSources.</td>
           </tr>
 
         </tbody>
