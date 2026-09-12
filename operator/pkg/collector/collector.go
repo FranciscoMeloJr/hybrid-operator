@@ -105,6 +105,18 @@ type OperatorInfo struct {
     TopologyGraph    []TopologyNode      `json:"topology_graph"`
     EstDowntime      string              `json:"est_downtime"`
     RiskScore        int                 `json:"risk_score"`
+    HealthScore      int                 `json:"health_score"`
+    CVEs             []CVEInfo           `json:"cves"`
+    CVECount         int                 `json:"cve_count"`
+}
+
+type CVEInfo struct {
+    ID            string   `json:"id"`
+    Severity      string   `json:"severity"`
+    Description   string   `json:"description"`
+    FixedVersion  string   `json:"fixed_version"`
+    PublishedDate string   `json:"published_date"`
+    CVSS          float64  `json:"cvss_score"`
 }
 
 type AnomalyInfo struct {
@@ -538,6 +550,7 @@ func GetClusterGovernance(ctx context.Context, dynClient dynamic.Interface) (Clu
         op.TopologyGraph = BuildDependencyGraph(op)
         op.EstDowntime = EstimateMaintenanceWindow(op, 3) // Assuming 3 worker node baseline
         op.RiskScore = CalculateSecurityRiskScore(op)
+        op.HealthScore = CalculateHealthScore(op)
 
         results = append(results, op)
     }
@@ -810,4 +823,245 @@ func BuildUpgradeFlowData(operators []OperatorInfo) SankeyData {
         Nodes: nodes,
         Links: links,
     }
+}
+
+// GVR helper functions for API handlers
+func SubscriptionsGVR() schema.GroupVersionResource {
+    return subscriptionGVR
+}
+
+func ClusterServiceVersionsGVR() schema.GroupVersionResource {
+    return csvGVR
+}
+
+// DependencyGraph structures for visualization
+type DependencyNode struct {
+    ID       string `json:"id"`
+    Label    string `json:"label"`
+    Type     string `json:"type"` // "operator" or "crd"
+    Group    string `json:"group"` // "provider", "consumer", "both"
+    Shape    string `json:"shape"`
+    Color    string `json:"color"`
+}
+
+type DependencyEdge struct {
+    From  string `json:"from"`
+    To    string `json:"to"`
+    Label string `json:"label"`
+    Type  string `json:"type"` // "provides", "consumes"
+}
+
+type DependencyGraphData struct {
+    Nodes []DependencyNode `json:"nodes"`
+    Edges []DependencyEdge `json:"edges"`
+}
+
+type ImpactAnalysis struct {
+    Operator          string   `json:"operator"`
+    DirectDependents  []string `json:"direct_dependents"`
+    IndirectDependents []string `json:"indirect_dependents"`
+    ProvidedCRDs      []string `json:"provided_crds"`
+    ConsumedCRDs      []string `json:"consumed_crds"`
+    BreakageRisk      string   `json:"breakage_risk"` // "Low", "Medium", "High", "Critical"
+}
+
+// BuildDependencyGraphData generates dependency graph from operators
+// Note: This creates a visualization showing operator CRD relationships
+// Real cross-operator dependencies would require querying all CRs in cluster
+func BuildDependencyGraphData(operators []OperatorInfo) DependencyGraphData {
+    nodes := make([]DependencyNode, 0)
+    edges := make([]DependencyEdge, 0)
+
+    // Track all CRDs across all operators
+    allCRDKinds := make(map[string]string) // CRD kind -> operator that provides it
+
+    // First pass: collect all CRDs
+    for _, op := range operators {
+        opID := op.Name
+        if opID == "" {
+            opID = op.Package
+        }
+        if opID == "" {
+            continue
+        }
+
+        for _, crd := range op.CRDs {
+            if _, exists := allCRDKinds[crd.Kind]; !exists {
+                allCRDKinds[crd.Kind] = opID
+            }
+        }
+    }
+
+    // Second pass: build nodes and detect patterns
+    operatorRoles := make(map[string]string) // operator -> role
+
+    for _, op := range operators {
+        opID := op.Name
+        if opID == "" {
+            opID = op.Package
+        }
+        if opID == "" {
+            continue
+        }
+
+        // Determine operator characteristics
+        hasCRDs := len(op.CRDs) > 0
+        hasActiveCRs := op.ActiveCRs > 0
+
+        var role string
+        var color string
+
+        if hasCRDs && hasActiveCRs {
+            // Has CRDs and uses them
+            role = "both"
+            color = "#9333ea" // purple
+        } else if hasCRDs {
+            // Provides CRDs only
+            role = "provider"
+            color = "#3b82f6" // blue
+        } else if hasActiveCRs {
+            // Consumes CRDs only
+            role = "consumer"
+            color = "#22c55e" // green
+        } else {
+            // No CRDs or CRs
+            role = "standalone"
+            color = "#6b7280" // gray
+        }
+
+        operatorRoles[opID] = role
+
+        nodes = append(nodes, DependencyNode{
+            ID:    opID,
+            Label: opID,
+            Type:  "operator",
+            Group: role,
+            Shape: "box",
+            Color: color,
+        })
+    }
+
+    // Third pass: build edges - create simple connections between operators
+    // that share CRD kinds (simplified dependency detection)
+    edgeMap := make(map[string]bool) // deduplicate edges
+
+    // Group operators by the CRDs they provide
+    crdToOperators := make(map[string][]string)
+    for _, op := range operators {
+        opID := op.Name
+        if opID == "" {
+            opID = op.Package
+        }
+        if opID == "" {
+            continue
+        }
+
+        for _, crd := range op.CRDs {
+            crdToOperators[crd.Kind] = append(crdToOperators[crd.Kind], opID)
+        }
+    }
+
+    // Create edges between operators that provide the same CRD type
+    // (indicating potential collaboration or shared resource patterns)
+    for crdKind, opList := range crdToOperators {
+        if len(opList) > 1 {
+            // Multiple operators provide same CRD - they're related
+            for i := 0; i < len(opList)-1; i++ {
+                for j := i + 1; j < len(opList); j++ {
+                    edgeKey := opList[i] + "->" + opList[j]
+                    if !edgeMap[edgeKey] {
+                        edgeMap[edgeKey] = true
+                        edges = append(edges, DependencyEdge{
+                            From:  opList[i],
+                            To:    opList[j],
+                            Label: crdKind + " (shared)",
+                            Type:  "shares",
+                        })
+                    }
+                }
+            }
+        }
+    }
+
+    return DependencyGraphData{
+        Nodes: nodes,
+        Edges: edges,
+    }
+}
+
+// AnalyzeOperatorImpact analyzes what would break if an operator is removed
+func AnalyzeOperatorImpact(operators []OperatorInfo, operatorName string) ImpactAnalysis {
+    result := ImpactAnalysis{
+        Operator:          operatorName,
+        DirectDependents:  []string{},
+        IndirectDependents: []string{},
+        ProvidedCRDs:      []string{},
+        ConsumedCRDs:      []string{},
+        BreakageRisk:      "Low",
+    }
+
+    // Find the target operator
+    var targetOp *OperatorInfo
+    for i := range operators {
+        if operators[i].Name == operatorName || operators[i].Package == operatorName {
+            targetOp = &operators[i]
+            break
+        }
+    }
+
+    if targetOp == nil {
+        return result
+    }
+
+    // Collect CRDs provided by this operator
+    providedCRDKinds := make(map[string]bool)
+    for _, crd := range targetOp.CRDs {
+        result.ProvidedCRDs = append(result.ProvidedCRDs, crd.Kind)
+        providedCRDKinds[crd.Kind] = true
+
+        if crd.ActiveCount > 0 {
+            result.ConsumedCRDs = append(result.ConsumedCRDs, crd.Kind)
+        }
+    }
+
+    // Find operators that depend on CRDs provided by this operator
+    dependentMap := make(map[string]bool)
+
+    for _, op := range operators {
+        if op.Name == operatorName || op.Package == operatorName {
+            continue
+        }
+
+        // Check if this operator uses any CRDs provided by target
+        for _, crd := range op.CRDs {
+            if providedCRDKinds[crd.Kind] && crd.ActiveCount > 0 {
+                opID := op.Name
+                if opID == "" {
+                    opID = op.Package
+                }
+                if !dependentMap[opID] {
+                    dependentMap[opID] = true
+                    result.DirectDependents = append(result.DirectDependents, opID)
+                }
+            }
+        }
+    }
+
+    // Calculate risk
+    directCount := len(result.DirectDependents)
+    providedCount := len(result.ProvidedCRDs)
+
+    if directCount == 0 && providedCount == 0 {
+        result.BreakageRisk = "Low"
+    } else if directCount == 0 && providedCount > 0 {
+        result.BreakageRisk = "Low"
+    } else if directCount <= 2 {
+        result.BreakageRisk = "Medium"
+    } else if directCount <= 5 {
+        result.BreakageRisk = "High"
+    } else {
+        result.BreakageRisk = "Critical"
+    }
+
+    return result
 }
