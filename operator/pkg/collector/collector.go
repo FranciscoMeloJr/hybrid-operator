@@ -116,12 +116,44 @@ type AnomalyInfo struct {
     Action      string `json:"action"`
 }
 
+type OLMHealthStatus struct {
+    InstallPlanCount       int    `json:"installplan_count"`
+    InstallPlanPending     int    `json:"installplan_pending"`
+    InstallPlanFailed      int    `json:"installplan_failed"`
+    CatalogSourceCount     int    `json:"catalogsource_count"`
+    CatalogSourceReady     int    `json:"catalogsource_ready"`
+    CatalogSourceFailed    int    `json:"catalogsource_failed"`
+    OLMOperatorStatus      string `json:"olm_operator_status"`
+    CatalogOperatorStatus  string `json:"catalog_operator_status"`
+}
+
+type SankeyNode struct {
+    ID       string `json:"id"`
+    Label    string `json:"label"`
+    Category string `json:"category"`
+}
+
+type SankeyLink struct {
+    Source string   `json:"source"`
+    Target string   `json:"target"`
+    Value  int      `json:"value"`
+    Type   string   `json:"type"`
+    Operators []string `json:"operators"`
+}
+
+type SankeyData struct {
+    Nodes []SankeyNode `json:"nodes"`
+    Links []SankeyLink `json:"links"`
+}
+
 type ClusterGovernanceResponse struct {
     OCPCurrentVersion string         `json:"ocp_current_version"`
     OCPNextVersion    string         `json:"ocp_next_version"`
     Operators         []OperatorInfo `json:"operators"`
     Total             int            `json:"total"`
     Anomalies         []AnomalyInfo  `json:"anomalies"`
+    OLMHealth         OLMHealthStatus `json:"olm_health"`
+    UpgradeFlow       SankeyData     `json:"upgrade_flow"`
 }
 
 func parseSemver(versionStr string) [3]int {
@@ -334,7 +366,11 @@ func GetClusterGovernance(ctx context.Context, dynClient dynamic.Interface) (Clu
         }
 
         // Calculate total active Custom Resource instances across all owned CRDs
+        // Also collect namespaces where CRs are deployed for route scanning
         activeCRCount := 0
+        crNamespaces := make(map[string]bool)
+        crNamespaces[namespace] = true // Always include operator's own namespace
+
         for i := range op.CRDs {
             // CRD names are formatted as <plural>.<group>
             parts := strings.SplitN(op.CRDs[i].Name, ".", 2)
@@ -348,6 +384,14 @@ func GetClusterGovernance(ctx context.Context, dynClient dynamic.Interface) (Clu
                 if err == nil {
                     op.CRDs[i].ActiveCount = len(crs.Items)
                     activeCRCount += len(crs.Items)
+
+                    // Collect namespaces where CRs exist
+                    for _, cr := range crs.Items {
+                        crNS := cr.GetNamespace()
+                        if crNS != "" {
+                            crNamespaces[crNS] = true
+                        }
+                    }
                 }
             }
         }
@@ -358,19 +402,31 @@ func GetClusterGovernance(ctx context.Context, dynClient dynamic.Interface) (Clu
             op.IsIdle = true
         }
 
-        // Scan OpenShift Routes in operator namespace
-        routes, errRoute := dynClient.Resource(routeGVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
-        if errRoute == nil {
-            for _, r := range routes.Items {
-                host, foundHost, _ := unstructured.NestedString(r.Object, "spec", "host")
-                if foundHost && host != "" {
-                    op.ExposedRoutes = append(op.ExposedRoutes, host)
-                    op.Components = append(op.Components, OperatorComponent{
-                        Kind:      "Route",
-                        Name:      r.GetName(),
-                        Namespace: namespace,
-                        Status:    fmt.Sprintf("Host: %s", host),
-                    })
+        // Scan OpenShift Routes in all namespaces where this operator has CRs deployed
+        routeHostMap := make(map[string]bool) // Deduplication by host
+
+        for ns := range crNamespaces {
+            routes, errRoute := dynClient.Resource(routeGVR).Namespace(ns).List(ctx, metav1.ListOptions{})
+            if errRoute == nil {
+                for _, r := range routes.Items {
+                    host, foundHost, _ := unstructured.NestedString(r.Object, "spec", "host")
+                    if foundHost && host != "" {
+                        routeName := r.GetName()
+                        routeNS := r.GetNamespace()
+
+                        // Deduplicate by host to avoid counting the same route multiple times
+                        if !routeHostMap[host] {
+                            routeHostMap[host] = true
+                            routeIdentifier := fmt.Sprintf("%s (ns: %s)", host, routeNS)
+                            op.ExposedRoutes = append(op.ExposedRoutes, routeIdentifier)
+                            op.Components = append(op.Components, OperatorComponent{
+                                Kind:      "Route",
+                                Name:      routeName,
+                                Namespace: routeNS,
+                                Status:    fmt.Sprintf("Host: %s", host),
+                            })
+                        }
+                    }
                 }
             }
         }
@@ -487,6 +543,8 @@ func GetClusterGovernance(ctx context.Context, dynClient dynamic.Interface) (Clu
     }
 
     anomalies := DetectAnomalies(subs, ips, csvs, catsrcs)
+    olmHealth := CollectOLMHealthStatus(ctx, dynClient, ips, catsrcs)
+    upgradeFlow := BuildUpgradeFlowData(results)
 
     return ClusterGovernanceResponse{
         OCPCurrentVersion: ocpCurrent,
@@ -494,6 +552,8 @@ func GetClusterGovernance(ctx context.Context, dynClient dynamic.Interface) (Clu
         Operators:         results,
         Total:             len(results),
         Anomalies:         anomalies,
+        OLMHealth:         olmHealth,
+        UpgradeFlow:       upgradeFlow,
     }, nil
 }
 
@@ -643,4 +703,111 @@ func DetectAnomalies(
     }
 
     return anomalies
+}
+
+// BuildUpgradeFlowData generates Sankey diagram data for upgrade visualization
+func BuildUpgradeFlowData(operators []OperatorInfo) SankeyData {
+    // Track flows: map[sourceVersion][targetVersion] = operators
+    flowMap := make(map[string]map[string][]string)
+    nodeCounts := make(map[string]int)
+    nodeCategories := make(map[string]string)
+
+    for _, op := range operators {
+        currentVer := op.Version
+        if currentVer == "" {
+            currentVer = "Unknown"
+        }
+
+        var targetVer string
+        var category string
+
+        if !op.CanUpgrade {
+            // Up-to-date or no upgrade available
+            targetVer = "Up-to-Date"
+            category = "safe"
+        } else if op.Phase == "UpgradePending" || strings.Contains(op.Phase, "RequiresApproval") {
+            // Blocked/pending approval
+            targetVer = "Blocked"
+            category = "blocked"
+        } else {
+            // Has upgrade available
+            targetVer = op.TargetVersion
+            if targetVer == "" {
+                targetVer = "Available"
+            }
+            category = "target"
+        }
+
+        // Initialize nested map
+        if flowMap[currentVer] == nil {
+            flowMap[currentVer] = make(map[string][]string)
+        }
+        flowMap[currentVer][targetVer] = append(flowMap[currentVer][targetVer], op.Name)
+
+        // Track node counts
+        nodeCounts[currentVer]++
+        nodeCounts[targetVer]++
+
+        // Set categories
+        if nodeCategories[currentVer] == "" {
+            nodeCategories[currentVer] = "current"
+        }
+        if nodeCategories[targetVer] == "" {
+            nodeCategories[targetVer] = category
+        }
+    }
+
+    // Build nodes
+    var nodes []SankeyNode
+    nodeSet := make(map[string]bool)
+    for nodeID := range nodeCounts {
+        if !nodeSet[nodeID] {
+            count := nodeCounts[nodeID]
+            category := nodeCategories[nodeID]
+            label := fmt.Sprintf("%s (%d)", nodeID, count)
+            nodes = append(nodes, SankeyNode{
+                ID:       nodeID,
+                Label:    label,
+                Category: category,
+            })
+            nodeSet[nodeID] = true
+        }
+    }
+
+    // Build links
+    var links []SankeyLink
+    for source, targets := range flowMap {
+        for target, ops := range targets {
+            flowType := "minor"
+            if target == "Blocked" {
+                flowType = "blocked"
+            } else if target == "Up-to-Date" {
+                flowType = "uptodate"
+            } else {
+                // Determine upgrade type from first operator in this flow
+                for _, opName := range ops {
+                    for _, op := range operators {
+                        if op.Name == opName {
+                            flowType = strings.ToLower(op.UpgradeType)
+                            break
+                        }
+                    }
+                    break
+                }
+            }
+
+            links = append(links, SankeyLink{
+                Source:    source,
+                Target:    target,
+                Value:     len(ops),
+                Type:      flowType,
+                Operators: ops,
+            })
+        }
+    }
+
+    return SankeyData{
+        Nodes: nodes,
+        Links: links,
+    }
 }

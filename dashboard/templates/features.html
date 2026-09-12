@@ -16,9 +16,10 @@
       <div>
         <div class="flex items-center gap-3">
           <h1 class="text-2xl font-bold text-white">Hybrid Operator Roadmap</h1>
+          <span class="bg-emerald-900/50 border border-emerald-700 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">v1.8 Beta</span>
           <span class="bg-blue-900/50 border border-blue-700 text-blue-300 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Last Updated: September 2026</span>
         </div>
-        <p class="text-sm text-gray-400 mt-1">Feature Backlog & Implementation Status Matrix</p>
+        <p class="text-sm text-gray-400 mt-1">Feature Backlog & Implementation Status Matrix • 32 Completed • 9 Planned</p>
       </div>
     </div>
     
@@ -372,6 +373,214 @@
             <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">8 SP</td>
             <td class="px-4 py-4 text-xs">Added "OLM Health Audit" card, auto-report toggle switch, and interactive remediation modal view in <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">app.js</code>.</td>
             <td class="px-4 py-4 text-xs">Implemented <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">DetectAnomalies()</code> in Go evaluating <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">Status.Conditions</code> across Subscriptions, InstallPlans, CSVs, and CatalogSources.</td>
+          </tr>
+
+          <!-- Feature 26 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">26</td>
+            <td class="px-4 py-4 font-bold text-white">Autonomous Actions Toggle Control</td>
+            <td class="px-4 py-4 text-gray-400">User-controlled safety switch to enable/disable autonomous remediation actions (healing, reclaim) across the entire dashboard.</td>
+            <td class="px-4 py-4">
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">2 SP</td>
+            <td class="px-4 py-4 text-xs">Added header toggle switch with localStorage persistence, button state management, toast notifications, and blocking logic in <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">triggerRemediation()</code>.</td>
+            <td class="px-4 py-4 text-xs text-gray-500 italic">None (client-side only)</td>
+          </tr>
+
+          <!-- Feature 27 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">27</td>
+            <td class="px-4 py-4 font-bold text-white">Collapsible Dashboard Sections</td>
+            <td class="px-4 py-4 text-gray-400">Expandable/collapsible metric groups, charts, and operator grid to reduce visual clutter and improve navigation for large clusters.</td>
+            <td class="px-4 py-4">
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">2 SP</td>
+            <td class="px-4 py-4 text-xs">Added 6 collapsible sections with chevron indicators, smooth CSS transitions, localStorage state persistence, and <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">toggleSection()</code> handler.</td>
+            <td class="px-4 py-4 text-xs text-gray-500 italic">None (client-side only)</td>
+          </tr>
+
+          <!-- Feature 28 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">28</td>
+            <td class="px-4 py-4 font-bold text-white">Enhanced OLM Health Monitoring</td>
+            <td class="px-4 py-4 text-gray-400">Comprehensive real-time health checks for OLM infrastructure: InstallPlan counts, CatalogSource gRPC states, OLM operator pod status, and Catalog operator pod health.</td>
+            <td class="px-4 py-4">
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">5 SP</td>
+            <td class="px-4 py-4 text-xs">Dynamic OLM Health card with color-coded status badges, live metrics, and <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">updateOLMHealthStatus()</code> rendering logic.</td>
+            <td class="px-4 py-4 text-xs">Created <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">collector_health.go</code> with <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">CollectOLMHealthStatus()</code> function querying OLM pods, InstallPlans, and CatalogSource connection states.</td>
+          </tr>
+
+          <!-- Feature 29 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">29</td>
+            <td class="px-4 py-4 font-bold text-white">Grouped Cross-Namespace Conflict View</td>
+            <td class="px-4 py-4 text-gray-400">Visual grouping of conflicting operators by package name with resolution hints, making it immediately clear which operators are in conflict with each other.</td>
+            <td class="px-4 py-4">
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">3 SP</td>
+            <td class="px-4 py-4 text-xs">Redesigned conflict modal with grouped card-based rendering, numbered instance badges, metadata icons, and actionable resolution guidance per conflict group.</td>
+            <td class="px-4 py-4 text-xs text-gray-500 italic">None (enhanced client-side grouping logic)</td>
+          </tr>
+
+          <!-- Feature 30 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">30</td>
+            <td class="px-4 py-4 font-bold text-white">Dependency Topology Visualization</td>
+            <td class="px-4 py-4 text-gray-400">Interactive graph showing operator dependency chains: Subscription → CSV → CRDs → Active CRs with expandable/collapsible nodes.</td>
+            <td class="px-4 py-4">
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">5 SP</td>
+            <td class="px-4 py-4 text-xs">Added "View Topology" button and hierarchical tree modal with color-coded node types and recursive rendering.</td>
+            <td class="px-4 py-4 text-xs">Implemented <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">BuildDependencyGraph()</code> in Go constructing parent-child relationships across OLM resources.</td>
+          </tr>
+
+          <!-- Feature 31 -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">31</td>
+            <td class="px-4 py-4 font-bold text-white">Component Inspector & Resource Viewer</td>
+            <td class="px-4 py-4 text-gray-400">Deep-dive into operator infrastructure components: Deployments, ServiceAccounts, Pods, ConfigMaps, Secrets with live counts and namespaces.</td>
+            <td class="px-4 py-4">
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">5 SP</td>
+            <td class="px-4 py-4 text-xs">Added "Inspect Resources" button with modal showing categorized infrastructure components and counts.</td>
+            <td class="px-4 py-4 text-xs">Extended Go collector to query Deployments, ServiceAccounts, and other operator-owned resources via GVR.</td>
+          </tr>
+
+          <!-- Feature 32 - FUTURE -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">32</td>
+            <td class="px-4 py-4 font-bold text-white">Operator Risk Score Engine</td>
+            <td class="px-4 py-4 text-gray-400">Multi-factor risk assessment scoring: CRD breaking changes, external exposure, upgrade complexity, downtime risk, conflict potential.</td>
+            <td class="px-4 py-4">
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">5 SP</td>
+            <td class="px-4 py-4 text-xs">Risk score badge (0-100) displayed on operator cards with color-coding: green (0-30), amber (31-70), red (71-100).</td>
+            <td class="px-4 py-4 text-xs">Implemented <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">CalculateSecurityRiskScore()</code> in Go combining multiple risk factors with weighted scoring.</td>
+          </tr>
+
+          <!-- Feature 33 - COMPLETED -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">33</td>
+            <td class="px-4 py-4 font-bold text-white">Upgrade Flow Sankey Diagram</td>
+            <td class="px-4 py-4 text-gray-400">Interactive Sankey diagram visualizing operator upgrade paths: current versions → target versions, with flow width proportional to operator count and color-coded by upgrade type (minor/major/blocked).</td>
+            <td class="px-4 py-4">
+              <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">8 SP</td>
+            <td class="px-4 py-4 text-xs">Added D3.js and d3-sankey library integration. New collapsible "Upgrade Flow Visualization" section with interactive SVG diagram, hover tooltips showing operator lists, and color-coded legend (green=minor, orange=major, red=blocked, gray=uptodate).</td>
+            <td class="px-4 py-4 text-xs">Implemented <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">BuildUpgradeFlowData()</code> in Go aggregating operators by version pairs, added <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">SankeyNode</code>, <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">SankeyLink</code>, and <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">SankeyData</code> structs, returned via <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">upgrade_flow</code> field in inventory API.</td>
+          </tr>
+
+          <!-- Feature 41 - FUTURE -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">35/td>
+            <td class="px-4 py-4 font-bold text-white">Operator Dependency Drift Detector</td>
+            <td class="px-4 py-4 text-gray-400">Detect when multiple operators require incompatible versions of shared CRDs or have circular dependency conflicts.</td>
+            <td class="px-4 py-4">
+              <span class="bg-gray-800 border border-gray-700 text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Planned</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">8 SP</td>
+            <td class="px-4 py-4 text-xs">Add "Dependency Conflicts" metric card showing operators with incompatible CRD version requirements.</td>
+            <td class="px-4 py-4 text-xs">Build dependency graph analyzer comparing required vs installed CRD versions across all operators.</td>
+          </tr>
+
+          <!-- Feature 41 - FUTURE -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">35/td>
+            <td class="px-4 py-4 font-bold text-white">Automated Upgrade Orchestration</td>
+            <td class="px-4 py-4 text-gray-400">Safe, staged operator upgrade workflows with pre-flight checks, rollback capability, and automatic approval for low-risk upgrades.</td>
+            <td class="px-4 py-4">
+              <span class="bg-gray-800 border border-gray-700 text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Planned</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">13 SP</td>
+            <td class="px-4 py-4 text-xs">Add "Upgrade Plan" wizard with stage selection, approval gates, and real-time progress tracking.</td>
+            <td class="px-4 py-4 text-xs">Implement Go upgrade controller with pre-flight validation, staged rollout, health checks, and automatic rollback on failure.</td>
+          </tr>
+
+          <!-- Feature 41 - FUTURE -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">36/td>
+            <td class="px-4 py-4 font-bold text-white">GitOps Integration & Change Tracking</td>
+            <td class="px-4 py-4 text-gray-400">Audit trail of who changed what, when. Export operator configs to Git, track drift from declared state, and auto-sync capabilities.</td>
+            <td class="px-4 py-4">
+              <span class="bg-gray-800 border border-gray-700 text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Planned</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">13 SP</td>
+            <td class="px-4 py-4 text-xs">Add "Export to Git" button, change history viewer, and drift detection dashboard.</td>
+            <td class="px-4 py-4 text-xs">Integrate Git client library, implement audit log storage, and build diff engine comparing live vs declared state.</td>
+          </tr>
+
+          <!-- Feature 41 - FUTURE -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">37/td>
+            <td class="px-4 py-4 font-bold text-white">Multi-Cluster Federation Dashboard</td>
+            <td class="px-4 py-4 text-gray-400">Aggregate view across multiple OpenShift clusters showing operator versions, conflicts, and upgrade readiness in a unified pane.</td>
+            <td class="px-4 py-4">
+              <span class="bg-gray-800 border border-gray-700 text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Planned</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">21 SP</td>
+            <td class="px-4 py-4 text-xs">Add cluster selector dropdown, federated metrics aggregation, and cross-cluster comparison views.</td>
+            <td class="px-4 py-4 text-xs">Implement multi-kubeconfig support, parallel cluster collectors, and federated data aggregation pipeline.</td>
+          </tr>
+
+          <!-- Feature 41 - FUTURE -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">38/td>
+            <td class="px-4 py-4 font-bold text-white">Compliance & Policy Engine</td>
+            <td class="px-4 py-4 text-gray-400">Enforce organizational policies: allowed operator versions, forbidden channels, required security contexts, CVE scanning integration.</td>
+            <td class="px-4 py-4">
+              <span class="bg-gray-800 border border-gray-700 text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Planned</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">13 SP</td>
+            <td class="px-4 py-4 text-xs">Add "Policy Violations" metric card, policy rule editor, and violation details modal.</td>
+            <td class="px-4 py-4 text-xs">Implement OPA (Open Policy Agent) integration or custom policy engine evaluating operators against defined rules.</td>
+          </tr>
+
+          <!-- Feature 41 - FUTURE -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">39/td>
+            <td class="px-4 py-4 font-bold text-white">Advanced Search & Filtering</td>
+            <td class="px-4 py-4 text-gray-400">Full-text search across operators, CRDs, and CRs with advanced filters: namespace, version range, channel, status, risk score.</td>
+            <td class="px-4 py-4">
+              <span class="bg-gray-800 border border-gray-700 text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Planned</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">5 SP</td>
+            <td class="px-4 py-4 text-xs">Add search bar with typeahead, filter sidebar, and saved filter presets.</td>
+            <td class="px-4 py-4 text-xs text-gray-500 italic">None (client-side filtering with optional backend indexing)</td>
+          </tr>
+
+          <!-- Feature 41 - FUTURE -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">40/td>
+            <td class="px-4 py-4 font-bold text-white">Webhook & Event Integration</td>
+            <td class="px-4 py-4 text-gray-400">Send notifications to Slack, Teams, PagerDuty on critical events: failed operators, blocked upgrades, security vulnerabilities detected.</td>
+            <td class="px-4 py-4">
+              <span class="bg-gray-800 border border-gray-700 text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Planned</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">8 SP</td>
+            <td class="px-4 py-4 text-xs">Add webhook configuration UI, event rule builder, and notification history log.</td>
+            <td class="px-4 py-4 text-xs">Implement Go event dispatcher with pluggable webhook backends (Slack, Teams, generic HTTP).</td>
+          </tr>
+
+          <!-- Feature 41 - FUTURE -->
+          <tr class="hover:bg-gray-850/50 transition">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">41/td>
+            <td class="px-4 py-4 font-bold text-white">AI-Powered Upgrade Recommendations</td>
+            <td class="px-4 py-4 text-gray-400">ML model analyzing cluster patterns, historical upgrade success rates, and community data to recommend optimal upgrade paths and timing.</td>
+            <td class="px-4 py-4">
+              <span class="bg-purple-950 border border-purple-800 text-purple-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Research</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">21 SP</td>
+            <td class="px-4 py-4 text-xs">Add "AI Recommendations" card showing confidence scores and suggested upgrade sequences.</td>
+            <td class="px-4 py-4 text-xs">Train ML model on upgrade telemetry data, integrate inference endpoint, and build recommendation engine.</td>
           </tr>
 
         </tbody>

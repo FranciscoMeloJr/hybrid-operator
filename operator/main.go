@@ -43,11 +43,17 @@ func inventoryHandler(w http.ResponseWriter, r *http.Request) {
 	if opCache.Operators == nil {
 		opCache.Operators = []collector.OperatorInfo{}
 	}
+	if opCache.Anomalies == nil {
+		opCache.Anomalies = []collector.AnomalyInfo{}
+	}
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"ocp_current_version": opCache.OCPCurrentVersion,
 		"ocp_next_version":    opCache.OCPNextVersion,
 		"operators":           opCache.Operators,
 		"total":               opCache.Total,
+		"anomalies":           opCache.Anomalies,
+		"olm_health":          opCache.OLMHealth,
+		"upgrade_flow":        opCache.UpgradeFlow,
 	})
 }
 
