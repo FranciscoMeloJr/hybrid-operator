@@ -136,6 +136,10 @@ async function fetchTargets(forceRefresh = false) {
         document.getElementById('ocpNextBadge').textContent = `Target v${ocpNext}`;
     }
 
+    // Store operators globally for filtering
+    allOperators = currentOperatorData;
+    filteredOperators = currentOperatorData;
+
     updateMetrics(currentOperatorData);
     updateOLMHealthStatus(data);
 
@@ -146,7 +150,9 @@ async function fetchTargets(forceRefresh = false) {
     }
 
     renderCharts(currentOperatorData);
-    renderGrid(currentOperatorData);
+
+    // Initial render and filter setup
+    applyFilters();
 
     startAutoRefresh();
   } catch (error) {
@@ -774,12 +780,118 @@ function getSankeyHistory() {
   return [];
 }
 
-function loadSankeySnapshot(index) {
+let timelineSliderActive = false;
+let currentHistoryIndex = 0;
+
+function initTimelineSlider() {
+  const track = document.getElementById('timelineTrack');
+  const scrubber = document.getElementById('timelineScrubber');
+  const tooltip = document.getElementById('scrubberTooltip');
+
+  if (!track || !scrubber) return;
+
+  let isDragging = false;
+
+  // Mouse events
+  scrubber.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    scrubber.style.cursor = 'grabbing';
+    tooltip.style.opacity = '1';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    updateSliderPosition(e.clientX, track);
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isDragging) {
+      isDragging = false;
+      scrubber.style.cursor = 'grab';
+      tooltip.style.opacity = '0';
+    }
+  });
+
+  // Click on track to jump
+  track.addEventListener('click', (e) => {
+    if (e.target === scrubber || scrubber.contains(e.target)) return;
+    updateSliderPosition(e.clientX, track);
+  });
+
+  // Touch events for mobile
+  scrubber.addEventListener('touchstart', (e) => {
+    isDragging = true;
+    tooltip.style.opacity = '1';
+    e.preventDefault();
+  });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!isDragging) return;
+    const touch = e.touches[0];
+    updateSliderPosition(touch.clientX, track);
+  });
+
+  document.addEventListener('touchend', () => {
+    if (isDragging) {
+      isDragging = false;
+      tooltip.style.opacity = '0';
+    }
+  });
+}
+
+function updateSliderPosition(clientX, track) {
+  const rect = track.getBoundingClientRect();
+  let position = (clientX - rect.left) / rect.width;
+  position = Math.max(0, Math.min(1, position)); // Clamp to 0-1
+
+  const history = getSankeyHistory();
+  if (history.length === 0) return;
+
+  // Map position to history index (0 = oldest, 1 = newest)
+  const index = Math.round((1 - position) * (history.length - 1));
+
+  if (index !== currentHistoryIndex) {
+    currentHistoryIndex = index;
+    loadSankeySnapshotByIndex(index);
+    updateSliderUI(position);
+  }
+}
+
+function loadSankeySnapshotByIndex(index) {
   const history = getSankeyHistory();
   if (index >= 0 && index < history.length) {
     const snapshot = history[index];
     renderSankeyDiagram(snapshot.data);
-    renderHistoryTimeline(index);
+
+    // Update label
+    const label = document.getElementById('historyCurrentLabel');
+    if (label) {
+      const isCurrent = index === 0;
+      label.textContent = isCurrent ? `${snapshot.label} (CURRENT)` : snapshot.label;
+      label.className = isCurrent
+        ? 'text-xs text-white bg-green-600 px-2 py-0.5 rounded'
+        : 'text-xs text-gray-300 bg-gray-800 px-2 py-0.5 rounded';
+    }
+
+    // Update tooltip
+    const tooltip = document.getElementById('scrubberTooltip');
+    if (tooltip) {
+      tooltip.textContent = snapshot.label;
+    }
+  }
+}
+
+function updateSliderUI(position) {
+  const scrubber = document.getElementById('timelineScrubber');
+  const fill = document.getElementById('timelineFill');
+
+  if (scrubber) {
+    scrubber.style.left = `${position * 100}%`;
+  }
+
+  if (fill) {
+    fill.style.width = `${position * 100}%`;
   }
 }
 
@@ -794,33 +906,47 @@ function clearSankeyHistory() {
   }
 }
 
-function renderHistoryTimeline(activeIndex = 0) {
-  const timeline = document.getElementById('sankeyHistoryTimeline');
-  if (!timeline) return;
+function renderHistoryTimeline() {
+  const container = document.getElementById('historyTimelineContainer');
+  if (!container) return;
 
   const history = getSankeyHistory();
 
   if (history.length === 0) {
-    timeline.innerHTML = '<div class="text-xs text-gray-500 italic">No snapshots yet - data will be captured on each refresh</div>';
+    container.style.display = 'none';
     return;
   }
 
-  timeline.innerHTML = history.map((snapshot, index) => {
-    const isActive = index === activeIndex;
-    const isCurrent = index === 0;
-    const activeClass = isActive ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700';
-    const currentBadge = isCurrent ? '<span class="ml-1 text-[10px] bg-green-600 px-1 rounded">CURRENT</span>' : '';
+  // Show container
+  container.style.display = 'block';
 
-    return `
-      <button
-        onclick="loadSankeySnapshot(${index})"
-        class="${activeClass} text-xs px-3 py-1.5 rounded transition whitespace-nowrap"
-        title="Snapshot from ${snapshot.label}"
-      >
-        ${snapshot.label}${currentBadge}
-      </button>
-    `;
-  }).join('');
+  // Update labels
+  const oldest = document.getElementById('timelineOldest');
+  const newest = document.getElementById('timelineNewest');
+
+  if (oldest && history.length > 0) {
+    oldest.textContent = history[history.length - 1].label;
+  }
+
+  if (newest && history.length > 0) {
+    newest.textContent = history[0].label;
+  }
+
+  // Reset to current (newest)
+  currentHistoryIndex = 0;
+  updateSliderUI(1.0); // 100% = newest
+
+  const label = document.getElementById('historyCurrentLabel');
+  if (label && history.length > 0) {
+    label.textContent = `${history[0].label} (CURRENT)`;
+    label.className = 'text-xs text-white bg-green-600 px-2 py-0.5 rounded';
+  }
+
+  // Initialize slider if not already done
+  if (!timelineSliderActive) {
+    initTimelineSlider();
+    timelineSliderActive = true;
+  }
 }
 
 function renderSankeyDiagram(upgradeFlow) {
@@ -1187,10 +1313,124 @@ function renderCharts(operators) {
   }
 }
 
+// Global state for search and filters
+let allOperators = [];
+let filteredOperators = [];
+let searchDebounceTimer = null;
+
+// Comparison mode state
+let comparisonMode = false;
+let selectedForComparison = [];
+
+// Search handler with debounce
+function handleSearch(query) {
+  clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(() => {
+    applyFilters();
+  }, 300);
+}
+
+// Apply all filters and search
+function applyFilters() {
+  const searchQuery = document.getElementById('operatorSearchInput')?.value.toLowerCase() || '';
+
+  const filters = {
+    canUpgrade: document.getElementById('filterCanUpgrade')?.checked || false,
+    failed: document.getElementById('filterFailed')?.checked || false,
+    idle: document.getElementById('filterIdle')?.checked || false,
+    hasRoutes: document.getElementById('filterHasRoutes')?.checked || false,
+    majorUpgrade: document.getElementById('filterMajorUpgrade')?.checked || false,
+    highRisk: document.getElementById('filterHighRisk')?.checked || false,
+    blocked: document.getElementById('filterBlocked')?.checked || false,
+  };
+
+  filteredOperators = allOperators.filter(op => {
+    // Search filter
+    if (searchQuery) {
+      const searchableText = [
+        op.name || '',
+        op.package || '',
+        op.version || '',
+        op.namespace || '',
+        op.channel || '',
+      ].join(' ').toLowerCase();
+
+      if (!searchableText.includes(searchQuery)) {
+        return false;
+      }
+    }
+
+    // Checkbox filters
+    if (filters.canUpgrade && !op.can_upgrade) return false;
+    if (filters.failed && op.phase !== 'Failed') return false;
+    if (filters.idle && !op.is_idle) return false;
+    if (filters.hasRoutes && (!op.exposed_routes || op.exposed_routes.length === 0)) return false;
+    if (filters.majorUpgrade && op.upgrade_type !== 'MAJOR') return false;
+    if (filters.highRisk && (op.risk_score || 0) < 50) return false;
+    if (filters.blocked && !op.phase?.includes('Blocked') && !op.phase?.includes('RequiresApproval')) return false;
+
+    return true;
+  });
+
+  // Update result count
+  const resultCount = document.getElementById('filterResultCount');
+  if (resultCount) {
+    const activeFilterCount = Object.values(filters).filter(Boolean).length;
+    const hasSearch = searchQuery.length > 0;
+
+    if (activeFilterCount === 0 && !hasSearch) {
+      resultCount.textContent = `Showing all ${filteredOperators.length} operators`;
+    } else {
+      resultCount.textContent = `Found ${filteredOperators.length} of ${allOperators.length} operators`;
+    }
+  }
+
+  // Re-render grid with filtered results
+  renderGrid(filteredOperators);
+}
+
+// Helper function to render health score visual indicator
+function renderHealthScore(score) {
+  if (score === undefined || score === null) return '';
+
+  // Color coding based on score ranges
+  let colorClass, label;
+  if (score >= 90) {
+    colorClass = 'text-emerald-400';
+    label = 'Excellent';
+  } else if (score >= 70) {
+    colorClass = 'text-blue-400';
+    label = 'Good';
+  } else if (score >= 50) {
+    colorClass = 'text-yellow-400';
+    label = 'Fair';
+  } else if (score >= 30) {
+    colorClass = 'text-orange-400';
+    label = 'Poor';
+  } else {
+    colorClass = 'text-red-400';
+    label = 'Critical';
+  }
+
+  // Create 10-dot indicator (each dot = 10 points)
+  const filledDots = Math.floor(score / 10);
+  const dots = Array.from({length: 10}, (_, i) =>
+    i < filledDots ? '●' : '○'
+  ).join('');
+
+  return `
+    <div class="flex items-center gap-2 text-xs" title="Health Score: ${score}/100 - ${label}">
+      <span class="font-mono ${colorClass}">${dots}</span>
+      <span class="${colorClass} font-bold">${score}</span>
+      <span class="text-gray-500">/100</span>
+    </div>
+  `;
+}
+
 function renderGrid(operators) {
   const grid = document.getElementById('operatorGrid');
   if (!grid) return;
-  
+
   grid.innerHTML = '';
 
   if (operators.length === 0) {
@@ -1200,7 +1440,16 @@ function renderGrid(operators) {
 
   operators.forEach((op, index) => {
     const card = document.createElement('div');
-    card.className = 'bg-gray-900 border border-gray-800 rounded-lg p-5 shadow-lg transition hover:border-blue-600/60 cursor-pointer';
+    const isSelected = selectedForComparison.some(s => (s.name || s.package) === (op.name || op.package));
+
+    let cardClasses = 'bg-gray-900 border rounded-lg p-5 shadow-lg transition cursor-pointer';
+    if (comparisonMode) {
+      cardClasses += isSelected ? ' border-blue-500 bg-blue-950/20' : ' border-gray-800 hover:border-blue-600/60';
+    } else {
+      cardClasses += ' border-gray-800 hover:border-blue-600/60';
+    }
+
+    card.className = cardClasses;
 
     const currentCSVDisplay = op.installedCSV || op.version || 'N/A';
     const currentVerDisplay = op.version || 'v' + currentCSVDisplay;
@@ -1230,6 +1479,24 @@ function renderGrid(operators) {
       }
     } else {
       badges.push(`<span class="bg-gray-800 text-gray-400 text-xs px-2.5 py-1 rounded-full font-medium">Up to date</span>`);
+    }
+
+    // CVE badge
+    if (op.cves && op.cves.length > 0) {
+      const criticalCount = op.cves.filter(c => c.severity === 'Critical').length;
+      const highCount = op.cves.filter(c => c.severity === 'High').length;
+      const mediumCount = op.cves.filter(c => c.severity === 'Medium').length;
+
+      let cveBadgeClass = 'bg-gray-800 text-gray-400';
+      if (criticalCount > 0) {
+        cveBadgeClass = 'bg-red-900/60 border border-red-500 text-red-300 animate-pulse';
+      } else if (highCount > 0) {
+        cveBadgeClass = 'bg-orange-900/60 border border-orange-500 text-orange-300';
+      } else if (mediumCount > 0) {
+        cveBadgeClass = 'bg-yellow-900/60 border border-yellow-500 text-yellow-300';
+      }
+
+      badges.push(`<span class="${cveBadgeClass} text-xs px-2.5 py-1 rounded-full font-semibold cursor-pointer" onclick="event.stopPropagation(); openCVEModal('${op.name || op.package}')" title="Click to view CVE details">🔒 ${op.cves.length} CVE${op.cves.length > 1 ? 's' : ''}</span>`);
     }
 
     let badgeHTML = badges.join(' ');
@@ -1343,6 +1610,13 @@ function renderGrid(operators) {
       </div>
     `).join('') : `<div class="text-xs text-gray-500 italic p-3 bg-gray-950 rounded border border-gray-800">No owned Custom Resource Definitions found in installed CSV.</div>`;
 
+    const comparisonCheckbox = comparisonMode ? `
+      <label class="flex items-center gap-2 bg-gray-800 border border-gray-700 px-2 py-1 rounded cursor-pointer hover:border-blue-500 transition" onclick="event.stopPropagation();">
+        <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="selectForComparison('${op.name || op.package}')" class="rounded">
+        <span class="text-xs text-gray-400">Compare</span>
+      </label>
+    ` : '';
+
     card.innerHTML = `
       <div onclick="toggleCRDDrawer('crdDrawer-${index}')" class="flex justify-between items-start">
         <div>
@@ -1351,6 +1625,8 @@ function renderGrid(operators) {
               ${op.name || op.package}
               <svg id="chevron-${index}" class="w-4 h-4 text-gray-500 transition-transform transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </h2>
+            ${renderHealthScore(op.health_score)}
+            ${comparisonCheckbox}
             <button onclick="event.stopPropagation(); openComponentModal('${op.name || op.package}')" class="text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 text-blue-400 px-2 py-1 rounded transition font-mono flex items-center gap-1.5">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
               Inspect Resources
@@ -1371,11 +1647,57 @@ function renderGrid(operators) {
             Active CRs: <span class="${finalActiveCRs === 0 ? 'text-red-400' : 'text-emerald-400'} font-bold">${finalActiveCRs}</span>
           </p>
         </div>
-        <div class="text-right">
-          <span class="text-xs text-gray-500 uppercase font-semibold block">Current Version</span>
-          <span class="bg-gray-950 border border-gray-800 text-gray-200 font-mono font-bold text-sm px-3 py-1 rounded inline-block mt-1">
-            ${currentVerDisplay}
-          </span>
+        <div class="text-right flex flex-col items-end gap-2">
+          <div class="relative">
+            <button onclick="event.stopPropagation(); toggleQuickActions('${op.name || op.package}')" class="text-gray-400 hover:text-white transition bg-gray-800 hover:bg-gray-700 border border-gray-700 p-2 rounded" title="Quick Actions">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path>
+              </svg>
+            </button>
+            <div id="quickActions-${op.name || op.package}" class="hidden absolute right-0 mt-2 w-56 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-10" onclick="event.stopPropagation()">
+              ${op.can_upgrade && !op.phase?.includes('Blocked') ? `
+                <button onclick="quickActionApprove('${op.namespace}', '${op.name || op.package}')" class="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition flex items-center gap-2">
+                  <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                  </svg>
+                  Approve Upgrade
+                </button>
+              ` : ''}
+              <button onclick="quickActionRestartPod('${op.namespace}', '${op.name || op.package}')" class="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition flex items-center gap-2">
+                <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                Restart Pod
+              </button>
+              <button onclick="quickActionCopyYAML('${op.namespace}', '${op.name || op.package}', 'subscription')" class="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition flex items-center gap-2">
+                <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                </svg>
+                Copy Subscription YAML
+              </button>
+              ${op.installedCSV ? `
+              <button onclick="quickActionCopyYAML('${op.namespace}', '${op.installedCSV}', 'csv')" class="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition flex items-center gap-2">` : `
+              <button disabled class="w-full text-left px-4 py-2 text-sm text-gray-500 cursor-not-allowed transition flex items-center gap-2">`}
+                <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                </svg>
+                Copy CSV YAML
+              </button>
+              <hr class="border-gray-700 my-1">
+              <button onclick="quickActionDelete('${op.namespace}', '${op.name || op.package}')" class="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-950 transition flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+                Delete Subscription
+              </button>
+            </div>
+          </div>
+          <div>
+            <span class="text-xs text-gray-500 uppercase font-semibold block">Current Version</span>
+            <span class="bg-gray-950 border border-gray-800 text-gray-200 font-mono font-bold text-sm px-3 py-1 rounded inline-block mt-1">
+              ${currentVerDisplay}
+            </span>
+          </div>
         </div>
       </div>
       ${projectionHTML}
@@ -1781,6 +2103,805 @@ async function dispatchToNSAA() {
     } catch (err) {
         alert("Network error while reaching NSAA dispatcher: " + err);
     }
+}
+
+// Export Modal Functions
+function openExportModal() {
+  const modal = document.getElementById('exportModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => modal.classList.remove('opacity-0'), 10);
+  }
+}
+
+function closeExportModal() {
+  const modal = document.getElementById('exportModal');
+  if (modal) {
+    modal.classList.add('opacity-0');
+    setTimeout(() => {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }, 200);
+  }
+}
+
+function exportAsJSON() {
+  const data = {
+    exported_at: new Date().toISOString(),
+    ocp_version: document.getElementById('ocpCurrentBadge')?.textContent || 'Unknown',
+    operators: filteredOperators,
+    total_count: filteredOperators.length,
+  };
+
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `hybrid-operator-export-${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  closeExportModal();
+}
+
+function exportAsCSV() {
+  const headers = [
+    'Name', 'Package', 'Namespace', 'Channel', 'Version', 'Target Version',
+    'Phase', 'Can Upgrade', 'Upgrade Type', 'Risk Score', 'Health Score',
+    'Active CRs', 'CRDs', 'Is Idle', 'Exposed Routes'
+  ];
+
+  const rows = filteredOperators.map(op => [
+    op.name || '',
+    op.package || '',
+    op.namespace || '',
+    op.channel || '',
+    op.version || '',
+    op.target_version || '',
+    op.phase || '',
+    op.can_upgrade ? 'Yes' : 'No',
+    op.upgrade_type || 'N/A',
+    op.risk_score || 0,
+    op.health_score || 0,
+    op.active_crs || 0,
+    (op.crds || []).length,
+    op.is_idle ? 'Yes' : 'No',
+    (op.exposed_routes || []).length
+  ]);
+
+  const csvContent = [
+    headers.join(','),
+    ...rows.map(row => row.map(cell => {
+      const str = String(cell);
+      return str.includes(',') || str.includes('"') ? `"${str.replace(/"/g, '""')}"` : str;
+    }).join(','))
+  ].join('\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `hybrid-operator-export-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  closeExportModal();
+}
+
+async function exportAsPDF() {
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    // Title
+    doc.setFontSize(18);
+    doc.text('Hybrid Operator Dashboard Report', 14, 20);
+
+    // Metadata
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28);
+    doc.text(`OCP Version: ${document.getElementById('ocpCurrentBadge')?.textContent || 'Unknown'}`, 14, 34);
+
+    // Summary
+    doc.setFontSize(14);
+    doc.setTextColor(0);
+    doc.text('Summary', 14, 44);
+
+    doc.setFontSize(10);
+    const summary = [
+      `Total Operators: ${filteredOperators.length}`,
+      `Can Upgrade: ${filteredOperators.filter(op => op.can_upgrade).length}`,
+      `Failed: ${filteredOperators.filter(op => op.phase === 'Failed').length}`,
+      `Idle: ${filteredOperators.filter(op => op.is_idle).length}`,
+      `Average Health Score: ${Math.round(filteredOperators.reduce((sum, op) => sum + (op.health_score || 0), 0) / filteredOperators.length)}`,
+    ];
+
+    let y = 52;
+    summary.forEach(line => {
+      doc.text(line, 20, y);
+      y += 6;
+    });
+
+    // Operators Table
+    y += 8;
+    doc.setFontSize(14);
+    doc.text('Operators', 14, y);
+
+    y += 8;
+    doc.setFontSize(8);
+    filteredOperators.slice(0, 20).forEach((op, i) => {
+      if (y > 270) {
+        doc.addPage();
+        y = 20;
+      }
+
+      doc.text(`${i + 1}. ${op.name || op.package}`, 14, y);
+      doc.text(`v${op.version || 'N/A'}`, 100, y);
+      doc.text(op.phase || 'Unknown', 140, y);
+      doc.text(`Health: ${op.health_score || 0}`, 170, y);
+      y += 5;
+    });
+
+    if (filteredOperators.length > 20) {
+      y += 3;
+      doc.setTextColor(100);
+      doc.text(`... and ${filteredOperators.length - 20} more operators`, 14, y);
+    }
+
+    doc.save(`hybrid-operator-report-${new Date().toISOString().split('T')[0]}.pdf`);
+    closeExportModal();
+  } catch (err) {
+    console.error('PDF export error:', err);
+    alert('PDF export failed. Please try JSON or CSV instead.');
+  }
+}
+
+// Comparison Functions
+function toggleComparisonMode() {
+  comparisonMode = !comparisonMode;
+  selectedForComparison = [];
+
+  const btn = document.getElementById('comparisonModeBtn');
+  if (btn) {
+    if (comparisonMode) {
+      btn.classList.add('bg-blue-600', 'border-blue-500');
+      btn.classList.remove('bg-gray-800', 'border-gray-700');
+      btn.innerHTML = `
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+        <span>Exit Comparison Mode</span>
+      `;
+    } else {
+      btn.classList.remove('bg-blue-600', 'border-blue-500');
+      btn.classList.add('bg-gray-800', 'border-gray-700');
+      btn.innerHTML = `
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+        </svg>
+        <span>Compare Operators</span>
+      `;
+    }
+  }
+
+  renderGrid(filteredOperators);
+}
+
+function selectForComparison(opName) {
+  const index = selectedForComparison.findIndex(op => op.name === opName);
+
+  if (index >= 0) {
+    selectedForComparison.splice(index, 1);
+  } else {
+    if (selectedForComparison.length >= 3) {
+      alert('Maximum 3 operators can be compared at once');
+      return;
+    }
+    const op = allOperators.find(o => (o.name || o.package) === opName);
+    if (op) selectedForComparison.push(op);
+  }
+
+  renderGrid(filteredOperators);
+
+  if (selectedForComparison.length >= 2) {
+    openComparisonModal();
+  }
+}
+
+function openComparisonModal() {
+  if (selectedForComparison.length < 2) return;
+
+  const modal = document.getElementById('comparisonModal');
+  if (!modal) return;
+
+  const content = document.getElementById('comparisonContent');
+  if (!content) return;
+
+  // Build comparison table
+  let html = '<div class="grid gap-6" style="grid-template-columns: 200px ' + 'repeat(' + selectedForComparison.length + ', 1fr)">';
+
+  // Rows
+  const rows = [
+    { label: 'Name', getter: (op) => op.name || op.package },
+    { label: 'Version', getter: (op) => op.version || 'N/A' },
+    { label: 'Health Score', getter: (op) => {
+      const score = op.health_score || 0;
+      return `<span class="font-bold ${score >= 70 ? 'text-green-400' : score >= 50 ? 'text-yellow-400' : 'text-red-400'}">${score}/100</span>`;
+    }},
+    { label: 'Phase', getter: (op) => `<span class="${op.phase === 'Succeeded' ? 'text-green-400' : 'text-yellow-400'}">${op.phase}</span>` },
+    { label: 'Risk Score', getter: (op) => {
+      const risk = op.risk_score || 0;
+      return `<span class="${risk > 50 ? 'text-red-400' : risk > 30 ? 'text-yellow-400' : 'text-green-400'}">${risk}/100</span>`;
+    }},
+    { label: 'Can Upgrade', getter: (op) => op.can_upgrade ? '<span class="text-blue-400">Yes (' + (op.upgrade_type || 'PATCH') + ')</span>' : '<span class="text-gray-500">No</span>' },
+    { label: 'Active CRs', getter: (op) => op.active_crs || 0 },
+    { label: 'CRDs', getter: (op) => (op.crds || []).length },
+    { label: 'Idle', getter: (op) => op.is_idle ? '<span class="text-purple-400">Yes</span>' : '<span class="text-gray-500">No</span>' },
+    { label: 'Routes', getter: (op) => (op.exposed_routes || []).length },
+  ];
+
+  rows.forEach(row => {
+    html += `<div class="font-semibold text-gray-400 text-sm py-2 border-b border-gray-800">${row.label}</div>`;
+    selectedForComparison.forEach(op => {
+      html += `<div class="text-sm py-2 border-b border-gray-800">${row.getter(op)}</div>`;
+    });
+  });
+
+  html += '</div>';
+  content.innerHTML = html;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  setTimeout(() => modal.classList.remove('opacity-0'), 10);
+}
+
+function closeComparisonModal() {
+  const modal = document.getElementById('comparisonModal');
+  if (modal) {
+    modal.classList.add('opacity-0');
+    setTimeout(() => {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }, 200);
+  }
+}
+
+// Quick Actions Functions
+function toggleQuickActions(opName) {
+  const menu = document.getElementById(`quickActions-${opName}`);
+  if (!menu) return;
+
+  // Close all other menus
+  document.querySelectorAll('[id^="quickActions-"]').forEach(m => {
+    if (m.id !== `quickActions-${opName}`) {
+      m.classList.add('hidden');
+    }
+  });
+
+  menu.classList.toggle('hidden');
+}
+
+async function quickActionApprove(namespace, name) {
+  if (!confirm(`Approve upgrade for ${name} in ${namespace}?`)) return;
+
+  try {
+    const response = await fetch('/api/v1/actions/approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ namespace, name })
+    });
+
+    const result = await response.json();
+    alert(result.success ? `✓ ${result.message}` : `✗ ${result.message}`);
+
+    if (result.success) {
+      setTimeout(() => location.reload(), 1000);
+    }
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+async function quickActionRestartPod(namespace, name) {
+  if (!confirm(`Restart operator pod for ${name} in ${namespace}?\n\nThis will delete the pod and let Kubernetes recreate it.`)) return;
+
+  try {
+    const response = await fetch('/api/v1/actions/restart-pod', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ namespace, name })
+    });
+
+    const result = await response.json();
+    alert(result.success ? `✓ ${result.message}` : `✗ ${result.message}`);
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+async function quickActionCopyYAML(namespace, name, type) {
+  try {
+    const endpoint = type === 'subscription' ? '/api/v1/resources/subscription' : '/api/v1/resources/csv';
+    const response = await fetch(`${endpoint}?namespace=${namespace}&name=${name}`);
+
+    if (!response.ok) {
+      alert('Resource not found');
+      return;
+    }
+
+    const yamlData = await response.json();
+    const yamlText = JSON.stringify(yamlData, null, 2);
+
+    await navigator.clipboard.writeText(yamlText);
+    alert(`✓ ${type.toUpperCase()} YAML copied to clipboard`);
+  } catch (err) {
+    alert('Failed to copy: ' + err.message);
+  }
+}
+
+async function quickActionDelete(namespace, name) {
+  const confirmation = prompt(
+    `⚠️ DELETE SUBSCRIPTION\n\nThis will remove ${name} from ${namespace}.\n\nType the operator name to confirm:`,
+    ''
+  );
+
+  if (confirmation !== name) {
+    if (confirmation !== null) {
+      alert('Delete cancelled - name did not match');
+    }
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/v1/actions/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ namespace, name })
+    });
+
+    const result = await response.json();
+    alert(result.success ? `✓ ${result.message}` : `✗ ${result.message}`);
+
+    if (result.success) {
+      setTimeout(() => location.reload(), 1000);
+    }
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+// Close quick actions menu when clicking outside
+document.addEventListener('click', () => {
+  document.querySelectorAll('[id^="quickActions-"]').forEach(menu => {
+    menu.classList.add('hidden');
+  });
+});
+
+// CVE Modal Functions
+async function openCVEModal(operatorName) {
+  const modal = document.getElementById('cveModal');
+  const content = document.getElementById('cveContent');
+
+  if (!modal || !content) return;
+
+  // Find operator data
+  const op = allOperators.find(o => (o.name || o.package) === operatorName);
+
+  if (!op || !op.cves || op.cves.length === 0) {
+    content.innerHTML = '<p class="text-gray-400 text-center py-4">No CVEs found for this operator</p>';
+  } else {
+    const severityCounts = {
+      Critical: op.cves.filter(c => c.severity === 'Critical').length,
+      High: op.cves.filter(c => c.severity === 'High').length,
+      Medium: op.cves.filter(c => c.severity === 'Medium').length,
+      Low: op.cves.filter(c => c.severity === 'Low').length,
+    };
+
+    let html = `
+      <div class="mb-4">
+        <h4 class="text-lg font-semibold text-white mb-2">${op.name || op.package}</h4>
+        <p class="text-sm text-gray-400">Version: ${op.version || 'N/A'}</p>
+        <div class="flex gap-4 mt-3 text-sm">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 bg-red-500 rounded-full"></span>
+            <span class="text-gray-300">Critical: ${severityCounts.Critical}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 bg-orange-500 rounded-full"></span>
+            <span class="text-gray-300">High: ${severityCounts.High}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 bg-yellow-500 rounded-full"></span>
+            <span class="text-gray-300">Medium: ${severityCounts.Medium}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 bg-blue-500 rounded-full"></span>
+            <span class="text-gray-300">Low: ${severityCounts.Low}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-3 mt-4">
+        ${op.cves.map(cve => {
+          let severityBadgeClass = 'bg-gray-900/60 border-gray-600 text-gray-300';
+          if (cve.severity === 'Critical') {
+            severityBadgeClass = 'bg-red-900/60 border-red-600 text-red-300';
+          } else if (cve.severity === 'High') {
+            severityBadgeClass = 'bg-orange-900/60 border-orange-600 text-orange-300';
+          } else if (cve.severity === 'Medium') {
+            severityBadgeClass = 'bg-yellow-900/60 border-yellow-600 text-yellow-300';
+          } else if (cve.severity === 'Low') {
+            severityBadgeClass = 'bg-blue-900/60 border-blue-600 text-blue-300';
+          }
+
+          return `
+            <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+              <div class="flex justify-between items-start mb-2">
+                <div class="flex items-center gap-2">
+                  <span class="font-mono text-white font-bold">${cve.id}</span>
+                  <span class="${severityBadgeClass} border text-xs px-2 py-0.5 rounded-full">${cve.severity}</span>
+                  ${cve.cvss_score ? `<span class="text-xs text-gray-400">CVSS: ${cve.cvss_score}</span>` : ''}
+                </div>
+                <span class="text-xs text-gray-500">${cve.published_date || 'Unknown date'}</span>
+              </div>
+              <p class="text-sm text-gray-300 mb-2">${cve.description || 'No description available'}</p>
+              ${cve.fixed_version ? `
+                <div class="text-xs text-green-400 bg-green-950/40 border border-green-900/50 px-2 py-1 rounded">
+                  ✓ Fixed in version: ${cve.fixed_version}
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }).join('')}
+      </div>
+
+      ${op.can_upgrade ? `
+        <div class="mt-4 bg-blue-950/40 border border-blue-800 rounded p-3 text-sm text-blue-300">
+          💡 Upgrade to <strong>${op.target_version || 'latest'}</strong> may resolve some vulnerabilities
+        </div>
+      ` : ''}
+    `;
+
+    content.innerHTML = html;
+  }
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  setTimeout(() => modal.classList.remove('opacity-0'), 10);
+}
+
+function closeCVEModal() {
+  const modal = document.getElementById('cveModal');
+  if (modal) {
+    modal.classList.add('opacity-0');
+    setTimeout(() => {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }, 200);
+  }
+}
+
+// Dependency Graph State
+let dependencyNetwork = null;
+let dependencyGraphData = null;
+
+// Toggle Dependency Graph Section
+function toggleDependencyGraph() {
+  const section = document.getElementById('dependencyGraphSection');
+  if (!section) return;
+
+  const isHidden = section.classList.contains('hidden');
+
+  if (isHidden) {
+    section.classList.remove('hidden');
+    loadDependencyGraph();
+  } else {
+    section.classList.add('hidden');
+  }
+}
+
+// Load and Render Dependency Graph
+async function loadDependencyGraph() {
+  try {
+    const response = await fetch('/api/v1/dependencies/graph');
+    const data = await response.json();
+
+    dependencyGraphData = data;
+    renderDependencyGraph(data);
+  } catch (err) {
+    console.error('Failed to load dependency graph:', err);
+    document.getElementById('dependencyGraph').innerHTML =
+      '<div class="flex items-center justify-center h-full text-gray-500">Failed to load dependency graph</div>';
+  }
+}
+
+// Render vis.js Network
+function renderDependencyGraph(data) {
+  const container = document.getElementById('dependencyGraph');
+  if (!container) return;
+
+  // Prepare nodes for vis.js
+  const nodes = new vis.DataSet(
+    data.nodes.map(n => ({
+      id: n.id,
+      label: n.label,
+      shape: 'box',
+      color: {
+        background: n.color,
+        border: n.color,
+        highlight: {
+          background: n.color,
+          border: '#ffffff'
+        }
+      },
+      font: {
+        color: '#ffffff',
+        size: 14,
+        face: 'monospace'
+      },
+      margin: 10,
+      borderWidth: 2,
+      borderWidthSelected: 3
+    }))
+  );
+
+  // Prepare edges for vis.js
+  const edges = new vis.DataSet(
+    data.edges.map(e => ({
+      from: e.from,
+      to: e.to,
+      label: e.label,
+      arrows: 'to',
+      color: {
+        color: '#4b5563',
+        highlight: '#60a5fa'
+      },
+      font: {
+        color: '#9ca3af',
+        size: 10,
+        align: 'top'
+      },
+      smooth: {
+        type: 'cubicBezier',
+        forceDirection: 'horizontal'
+      }
+    }))
+  );
+
+  const graphData = {
+    nodes: nodes,
+    edges: edges
+  };
+
+  const options = {
+    layout: {
+      hierarchical: {
+        enabled: true,
+        direction: 'LR',
+        sortMethod: 'directed',
+        levelSeparation: 200,
+        nodeSpacing: 150,
+        treeSpacing: 200
+      }
+    },
+    physics: {
+      enabled: false
+    },
+    interaction: {
+      hover: true,
+      tooltipDelay: 100,
+      navigationButtons: true,
+      keyboard: {
+        enabled: true,
+        bindToWindow: false
+      }
+    },
+    nodes: {
+      shadow: true
+    },
+    edges: {
+      shadow: true,
+      width: 2
+    }
+  };
+
+  // Destroy existing network if any
+  if (dependencyNetwork) {
+    dependencyNetwork.destroy();
+  }
+
+  // Create new network
+  dependencyNetwork = new vis.Network(container, graphData, options);
+
+  // Add click event for impact analysis
+  dependencyNetwork.on('click', function(params) {
+    if (params.nodes.length > 0) {
+      const nodeId = params.nodes[0];
+      showOperatorImpact(nodeId);
+    }
+  });
+
+  // Add double-click to focus
+  dependencyNetwork.on('doubleClick', function(params) {
+    if (params.nodes.length > 0) {
+      dependencyNetwork.focus(params.nodes[0], {
+        scale: 1.5,
+        animation: true
+      });
+    }
+  });
+}
+
+// Reset Dependency Graph View
+function resetDependencyGraph() {
+  if (dependencyNetwork) {
+    dependencyNetwork.fit({
+      animation: {
+        duration: 500,
+        easingFunction: 'easeInOutQuad'
+      }
+    });
+  }
+}
+
+// Show Impact Analysis for Selected Operator
+async function showOperatorImpact(operatorName) {
+  try {
+    const response = await fetch(`/api/v1/dependencies/impact/${operatorName}`);
+    const impact = await response.json();
+
+    const modal = document.getElementById('impactModal');
+    const content = document.getElementById('impactContent');
+
+    if (!modal || !content) return;
+
+    // Risk color coding - use full class names for Tailwind
+    let riskBadgeClass = 'bg-gray-900/60 border-gray-600 text-gray-300';
+    if (impact.breakage_risk === 'Critical') {
+      riskBadgeClass = 'bg-red-900/60 border-red-600 text-red-300';
+    } else if (impact.breakage_risk === 'High') {
+      riskBadgeClass = 'bg-orange-900/60 border-orange-600 text-orange-300';
+    } else if (impact.breakage_risk === 'Medium') {
+      riskBadgeClass = 'bg-yellow-900/60 border-yellow-600 text-yellow-300';
+    } else if (impact.breakage_risk === 'Low') {
+      riskBadgeClass = 'bg-green-900/60 border-green-600 text-green-300';
+    }
+
+    let html = `
+      <div class="mb-4">
+        <h4 class="text-lg font-semibold text-white mb-2">${impact.operator}</h4>
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-gray-400">Removal Risk:</span>
+          <span class="${riskBadgeClass} border text-sm px-3 py-1 rounded-full font-semibold">
+            ${impact.breakage_risk}
+          </span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4 mb-4">
+        <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+          <h5 class="text-sm font-semibold text-blue-400 mb-2">Provides CRDs</h5>
+          ${impact.provided_crds && impact.provided_crds.length > 0 ? `
+            <ul class="space-y-1">
+              ${impact.provided_crds.map(crd => `
+                <li class="text-xs text-gray-300 font-mono">• ${crd}</li>
+              `).join('')}
+            </ul>
+          ` : '<p class="text-xs text-gray-500">No CRDs provided</p>'}
+        </div>
+
+        <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+          <h5 class="text-sm font-semibold text-green-400 mb-2">Consumes CRDs</h5>
+          ${impact.consumed_crds && impact.consumed_crds.length > 0 ? `
+            <ul class="space-y-1">
+              ${impact.consumed_crds.map(crd => `
+                <li class="text-xs text-gray-300 font-mono">• ${crd}</li>
+              `).join('')}
+            </ul>
+          ` : '<p class="text-xs text-gray-500">No CRDs consumed</p>'}
+        </div>
+      </div>
+
+      <div class="bg-gray-800 border border-gray-700 rounded-lg p-4 mb-4">
+        <h5 class="text-sm font-semibold text-red-400 mb-2">⚠️ Impact if Removed</h5>
+        ${impact.direct_dependents && impact.direct_dependents.length > 0 ? `
+          <p class="text-xs text-gray-400 mb-2">The following operators would be affected:</p>
+          <ul class="space-y-1">
+            ${impact.direct_dependents.map(dep => `
+              <li class="text-xs text-gray-300 font-mono bg-gray-900 px-2 py-1 rounded">
+                🔴 ${dep} <span class="text-red-400">(would lose CRD access)</span>
+              </li>
+            `).join('')}
+          </ul>
+          <div class="mt-3 bg-red-950/40 border border-red-800 rounded p-3 text-sm text-red-300">
+            <strong>Warning:</strong> Removing this operator will break ${impact.direct_dependents.length} dependent operator(s).
+          </div>
+        ` : `
+          <p class="text-xs text-green-400 bg-green-950/40 border border-green-900/50 px-3 py-2 rounded">
+            ✓ Safe to remove - No operators depend on this one
+          </p>
+        `}
+      </div>
+
+      ${impact.breakage_risk === 'Critical' || impact.breakage_risk === 'High' ? `
+        <div class="bg-orange-950/40 border border-orange-800 rounded p-3 text-sm text-orange-300">
+          💡 <strong>Recommendation:</strong> Consider migrating dependent operators before removal, or use a phased approach with advance communication.
+        </div>
+      ` : ''}
+    `;
+
+    content.innerHTML = html;
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => modal.classList.remove('opacity-0'), 10);
+  } catch (err) {
+    console.error('Failed to analyze impact:', err);
+    alert('Failed to load impact analysis');
+  }
+}
+
+// Close Impact Modal
+function closeImpactModal() {
+  const modal = document.getElementById('impactModal');
+  if (modal) {
+    modal.classList.add('opacity-0');
+    setTimeout(() => {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }, 200);
+  }
+}
+
+// Analyze Dependency Impact (opens modal for user to select operator)
+function analyzeDependencyImpact() {
+  if (!dependencyGraphData || !dependencyGraphData.nodes || dependencyGraphData.nodes.length === 0) {
+    alert('No dependency data available');
+    return;
+  }
+
+  // Create operator selection prompt
+  const operatorNames = dependencyGraphData.nodes.map(n => n.id).sort();
+  const selection = prompt(
+    'Enter operator name to analyze impact:\n\nAvailable operators:\n' +
+    operatorNames.slice(0, 10).join(', ') +
+    (operatorNames.length > 10 ? `\n...and ${operatorNames.length - 10} more` : ''),
+    operatorNames[0]
+  );
+
+  if (selection && operatorNames.includes(selection)) {
+    showOperatorImpact(selection);
+  } else if (selection) {
+    alert('Operator not found: ' + selection);
+  }
+}
+
+// Export Dependency Graph as PNG
+async function exportDependencyGraph() {
+  if (!dependencyNetwork) {
+    alert('No graph to export');
+    return;
+  }
+
+  try {
+    // Use html2canvas to capture the graph
+    const container = document.getElementById('dependencyGraph');
+    const canvas = await html2canvas(container, {
+      backgroundColor: '#030712',
+      scale: 2
+    });
+
+    // Download as PNG
+    const link = document.createElement('a');
+    link.download = `dependency-graph-${new Date().toISOString().split('T')[0]}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  } catch (err) {
+    console.error('Export failed:', err);
+    alert('Failed to export graph');
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

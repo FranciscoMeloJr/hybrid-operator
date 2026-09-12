@@ -107,6 +107,67 @@ func CalculateSecurityRiskScore(op OperatorInfo) int {
 	return score
 }
 
+// CalculateHealthScore computes an overall health score (0-100) for an operator
+// Higher score = healthier. Factors: phase status, upgrade readiness, activity, stability
+func CalculateHealthScore(op OperatorInfo) int {
+	score := 100 // Start with perfect score
+
+	// Phase Status (40 points max deduction)
+	switch op.Phase {
+	case "Failed", "UpgradeFailed", "InstallPlanFailed":
+		score -= 40
+	case "Unknown", "Pending":
+		score -= 25
+	case "UpgradePending":
+		score -= 10
+	case "Succeeded":
+		// No deduction - healthy
+	default:
+		score -= 5 // Minor deduction for unexpected phase
+	}
+
+	// Upgrade Status (20 points max deduction)
+	if op.CanUpgrade {
+		if op.UpgradeType == "MAJOR" {
+			score -= 15 // Major upgrades = higher risk
+		} else if op.UpgradeType == "MINOR" {
+			score -= 5 // Minor upgrades = lower risk
+		}
+	}
+
+	// CRD Breaking Changes (15 points deduction)
+	if op.CRDDiff.HasBreakingImpact {
+		score -= 15
+	}
+
+	// Activity & Usefulness (10 points deduction)
+	if op.IsIdle && op.ActiveCRs == 0 {
+		score -= 10 // Idle with no CRs = wasting resources
+	}
+
+	// External Exposure Risk (10 points deduction)
+	if len(op.ExposedRoutes) > 2 {
+		score -= 10 // Many external routes = attack surface
+	} else if len(op.ExposedRoutes) > 0 {
+		score -= 5
+	}
+
+	// OCP Compatibility (5 points deduction)
+	if op.OCPBlocker {
+		score -= 5
+	}
+
+	// Ensure score is within 0-100 range
+	if score < 0 {
+		score = 0
+	}
+	if score > 100 {
+		score = 100
+	}
+
+	return score
+}
+
 // ExecuteRemediationAction executes autonomous self-healing fix directives
 func ExecuteRemediationAction(ctx context.Context, dynClient dynamic.Interface, action string, namespace string, target string) RemediationResult {
 	result := RemediationResult{

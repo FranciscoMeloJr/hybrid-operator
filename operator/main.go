@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -64,6 +65,209 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
+// Quick Actions API Handlers
+func handleApproveUpgrade(w http.ResponseWriter, r *http.Request, dynClient dynamic.Interface) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Namespace string `json:"namespace"`
+		Name      string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	result := collector.ExecuteRemediationAction(context.Background(), dynClient, "REAPPROVE_INSTALLPLAN", req.Namespace, req.Name)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+func handleRestartPod(w http.ResponseWriter, r *http.Request, clientset *kubernetes.Clientset) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Namespace string `json:"namespace"`
+		Name      string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	// Find operator pods by label
+	pods, err := clientset.CoreV1().Pods(req.Namespace).List(context.Background(), metav1.ListOptions{
+		LabelSelector: "operators.coreos.com/" + req.Name,
+	})
+
+	success := false
+	message := "No pods found"
+
+	if err == nil && len(pods.Items) > 0 {
+		for _, pod := range pods.Items {
+			err := clientset.CoreV1().Pods(req.Namespace).Delete(context.Background(), pod.Name, metav1.DeleteOptions{})
+			if err == nil {
+				success = true
+				message = "Pod " + pod.Name + " deleted successfully"
+				break
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": success,
+		"message": message,
+	})
+}
+
+func handleDeleteSubscription(w http.ResponseWriter, r *http.Request, dynClient dynamic.Interface) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Namespace string `json:"namespace"`
+		Name      string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	result := collector.ExecuteRemediationAction(context.Background(), dynClient, "PURGE_IDLE_SUBSCRIPTION", req.Namespace, req.Name)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+func handleGetSubscriptionYAML(w http.ResponseWriter, r *http.Request, dynClient dynamic.Interface) {
+	namespace := r.URL.Query().Get("namespace")
+	name := r.URL.Query().Get("name")
+
+	if namespace == "" || name == "" {
+		http.Error(w, "Missing namespace or name", http.StatusBadRequest)
+		return
+	}
+
+	gvr := collector.SubscriptionsGVR()
+	obj, err := dynClient.Resource(gvr).Namespace(namespace).Get(context.Background(), name, metav1.GetOptions{})
+
+	if err != nil {
+		http.Error(w, "Resource not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(obj.Object)
+}
+
+func handleGetCSVYAML(w http.ResponseWriter, r *http.Request, dynClient dynamic.Interface) {
+	namespace := r.URL.Query().Get("namespace")
+	name := r.URL.Query().Get("name")
+
+	if namespace == "" || name == "" {
+		http.Error(w, "Missing namespace or name", http.StatusBadRequest)
+		return
+	}
+
+	gvr := collector.ClusterServiceVersionsGVR()
+	obj, err := dynClient.Resource(gvr).Namespace(namespace).Get(context.Background(), name, metav1.GetOptions{})
+
+	if err != nil {
+		http.Error(w, "Resource not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(obj.Object)
+}
+
+// CVE API Handlers
+func handleGetAllCVEs(w http.ResponseWriter, r *http.Request) {
+	cacheLock.RLock()
+	defer cacheLock.RUnlock()
+
+	summary := make(map[string]map[string]int)
+
+	for _, op := range opCache.Operators {
+		if len(op.CVEs) > 0 {
+			counts := map[string]int{"Critical": 0, "High": 0, "Medium": 0, "Low": 0}
+			for _, cve := range op.CVEs {
+				counts[cve.Severity]++
+			}
+			summary[op.Name] = counts
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(summary)
+}
+
+func handleGetOperatorCVEs(w http.ResponseWriter, r *http.Request) {
+	operatorName := strings.TrimPrefix(r.URL.Path, "/api/v1/cves/")
+
+	if operatorName == "" {
+		http.Error(w, "Operator name required", http.StatusBadRequest)
+		return
+	}
+
+	cacheLock.RLock()
+	defer cacheLock.RUnlock()
+
+	for _, op := range opCache.Operators {
+		if op.Name == operatorName || op.Package == operatorName {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"operator": op.Name,
+				"package":  op.Package,
+				"version":  op.Version,
+				"cves":     op.CVEs,
+				"count":    len(op.CVEs),
+			})
+			return
+		}
+	}
+
+	http.Error(w, "Operator not found", http.StatusNotFound)
+}
+
+// Dependency Graph API Handlers
+func handleGetDependencyGraph(w http.ResponseWriter, r *http.Request) {
+	cacheLock.RLock()
+	defer cacheLock.RUnlock()
+
+	graphData := collector.BuildDependencyGraphData(opCache.Operators)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(graphData)
+}
+
+func handleGetImpactAnalysis(w http.ResponseWriter, r *http.Request) {
+	operatorName := strings.TrimPrefix(r.URL.Path, "/api/v1/dependencies/impact/")
+
+	if operatorName == "" {
+		http.Error(w, "Operator name required", http.StatusBadRequest)
+		return
+	}
+
+	cacheLock.RLock()
+	defer cacheLock.RUnlock()
+
+	impact := collector.AnalyzeOperatorImpact(opCache.Operators, operatorName)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(impact)
+}
+
 func main() {
 	brainURL := getEnv("BRAIN_SERVICE_URL", "http://brain-service.hybrid-apps.svc.cluster.local:5005/api/telemetry")
 	targetNamespace := getEnv("TARGET_NAMESPACE", "hybrid-apps")
@@ -93,6 +297,25 @@ func main() {
 	// --- ROUTINE 0: Internal Inventory HTTP Server ---
 	go func() {
 		http.HandleFunc("/api/v1/inventory", inventoryHandler)
+		http.HandleFunc("/api/v1/actions/approve", func(w http.ResponseWriter, r *http.Request) {
+			handleApproveUpgrade(w, r, dynClient)
+		})
+		http.HandleFunc("/api/v1/actions/restart-pod", func(w http.ResponseWriter, r *http.Request) {
+			handleRestartPod(w, r, clientset)
+		})
+		http.HandleFunc("/api/v1/actions/delete", func(w http.ResponseWriter, r *http.Request) {
+			handleDeleteSubscription(w, r, dynClient)
+		})
+		http.HandleFunc("/api/v1/resources/subscription", func(w http.ResponseWriter, r *http.Request) {
+			handleGetSubscriptionYAML(w, r, dynClient)
+		})
+		http.HandleFunc("/api/v1/resources/csv", func(w http.ResponseWriter, r *http.Request) {
+			handleGetCSVYAML(w, r, dynClient)
+		})
+		http.HandleFunc("/api/v1/cves", handleGetAllCVEs)
+		http.HandleFunc("/api/v1/cves/", handleGetOperatorCVEs)
+		http.HandleFunc("/api/v1/dependencies/graph", handleGetDependencyGraph)
+		http.HandleFunc("/api/v1/dependencies/impact/", handleGetImpactAnalysis)
 		log.Println("[GO OPERATOR] Serving internal inventory API on 127.0.0.1:8080")
 		if err := http.ListenAndServe("127.0.0.1:8080", nil); err != nil {
 			log.Printf("[GO OPERATOR ERROR] Failed to start internal HTTP server: %v", err)

@@ -19,7 +19,7 @@
           <span class="bg-emerald-900/50 border border-emerald-700 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">v1.8 Beta</span>
           <span class="bg-blue-900/50 border border-blue-700 text-blue-300 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Last Updated: September 2026</span>
         </div>
-        <p class="text-sm text-gray-400 mt-1">Feature Backlog & Implementation Status Matrix • 32 Completed • 9 Planned</p>
+        <p class="text-sm text-gray-400 mt-1">Feature Backlog & Implementation Status Matrix • 33 Completed • 18 In Progress</p>
       </div>
     </div>
     
@@ -479,7 +479,132 @@
             <td class="px-4 py-4 text-xs">Implemented <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">BuildUpgradeFlowData()</code> in Go aggregating operators by version pairs, added <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">SankeyNode</code>, <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">SankeyLink</code>, and <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">SankeyData</code> structs, returned via <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">upgrade_flow</code> field in inventory API.</td>
           </tr>
 
-          <!-- Feature 41 - FUTURE -->
+          <!-- PHASE A: QUICK WINS -->
+
+          <!-- Feature 34 - IN PROGRESS -->
+          <tr class="hover:bg-gray-850/50 transition bg-blue-950/20">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">34</td>
+            <td class="px-4 py-4 font-bold text-white">Operator Health Score (0-100)</td>
+            <td class="px-4 py-4 text-gray-400">Single numerical health score (0-100) for each operator with visual indicator. Factors: phase status (40pts), upgrade readiness (20pts), activity (10pts), stability (20pts), security (10pts).</td>
+            <td class="px-4 py-4">
+              <span class="bg-blue-900 border border-blue-700 text-blue-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">In Progress</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">3 SP</td>
+            <td class="px-4 py-4 text-xs">Health score display on operator cards with 10-dot visual indicator. Color-coded: 90-100 (Excellent/Green), 70-89 (Good/Blue), 50-69 (Fair/Yellow), 30-49 (Poor/Orange), 0-29 (Critical/Red). Hover tooltip shows breakdown.</td>
+            <td class="px-4 py-4 text-xs">✓ Implemented <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">CalculateHealthScore()</code> in remediation.go. Added <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">health_score</code> field to OperatorInfo struct.</td>
+          </tr>
+
+          <!-- Feature 35 - IN PROGRESS -->
+          <tr class="hover:bg-gray-850/50 transition bg-blue-950/20">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">35</td>
+            <td class="px-4 py-4 font-bold text-white">Search & Filter Bar</td>
+            <td class="px-4 py-4 text-gray-400">Live search across operators (name, package, version, namespace, channel) with filter checkboxes: Can Upgrade, Failed, Idle, Has Routes, Major Upgrade, High Risk, Blocked.</td>
+            <td class="px-4 py-4">
+              <span class="bg-blue-900 border border-blue-700 text-blue-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">In Progress</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">2 SP</td>
+            <td class="px-4 py-4 text-xs">Search bar with 300ms debounce, 8 filter checkboxes, result count display, URL param persistence. Client-side filtering with instant updates.</td>
+            <td class="px-4 py-4 text-xs text-gray-500 italic">None (pure frontend)</td>
+          </tr>
+
+          <!-- Feature 36 - IN PROGRESS -->
+          <tr class="hover:bg-gray-850/50 transition bg-blue-950/20">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">36</td>
+            <td class="px-4 py-4 font-bold text-white">Quick Actions Menu</td>
+            <td class="px-4 py-4 text-gray-400">Context menu on operator cards: Approve Upgrade, Restart Pod, Copy YAML (Subscription/CSV), View in OpenShift Console, Delete Subscription.</td>
+            <td class="px-4 py-4">
+              <span class="bg-blue-900 border border-blue-700 text-blue-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">In Progress</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">4 SP</td>
+            <td class="px-4 py-4 text-xs">Three-dot menu on cards. Confirmation modals for destructive actions. Clipboard API for YAML copy. Action result notifications.</td>
+            <td class="px-4 py-4 text-xs">New API endpoints: <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/api/v1/actions/{approve,restart-pod,delete}</code> and <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/api/v1/resources/{subscription,csv}</code></td>
+          </tr>
+
+          <!-- Feature 37 - IN PROGRESS -->
+          <tr class="hover:bg-gray-850/50 transition bg-blue-950/20">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">37</td>
+            <td class="px-4 py-4 font-bold text-white">Export Dashboard Data</td>
+            <td class="px-4 py-4 text-gray-400">Download current state as JSON (full API response), CSV (operator table), or PDF (executive summary with charts).</td>
+            <td class="px-4 py-4">
+              <span class="bg-blue-900 border border-blue-700 text-blue-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">In Progress</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">3 SP</td>
+            <td class="px-4 py-4 text-xs">Export modal with format selection. Uses jsPDF for PDF generation, html2canvas for charts. CSV with proper escaping.</td>
+            <td class="px-4 py-4 text-xs text-gray-500 italic">None (pure frontend)</td>
+          </tr>
+
+          <!-- Feature 38 - IN PROGRESS -->
+          <tr class="hover:bg-gray-850/50 transition bg-blue-950/20">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">38</td>
+            <td class="px-4 py-4 font-bold text-white">Operator Comparison View</td>
+            <td class="px-4 py-4 text-gray-400">Side-by-side comparison of 2-3 operators showing differences in health, risk, CRDs, resources, configuration with delta highlighting.</td>
+            <td class="px-4 py-4">
+              <span class="bg-blue-900 border border-blue-700 text-blue-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">In Progress</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">3 SP</td>
+            <td class="px-4 py-4 text-xs">Comparison mode toggle, operator selection UI, side-by-side layout with difference highlighting. Color-coded deltas (green=improvement, red=degradation).</td>
+            <td class="px-4 py-4 text-xs text-gray-500 italic">None (pure frontend)</td>
+          </tr>
+
+          <!-- PHASE B: SECURITY -->
+
+          <!-- Feature 39 - IN PROGRESS -->
+          <tr class="hover:bg-gray-850/50 transition bg-blue-950/20">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">39</td>
+            <td class="px-4 py-4 font-bold text-white">CVE Scanner Integration</td>
+            <td class="px-4 py-4 text-gray-400">Show security vulnerabilities (CVEs) affecting each operator version. Severity badges (Critical/High/Medium/Low), "Upgrade to patch" recommendations.</td>
+            <td class="px-4 py-4">
+              <span class="bg-blue-900 border border-blue-700 text-blue-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">In Progress</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">8 SP</td>
+            <td class="px-4 py-4 text-xs">CVE badge on operator cards. CVE details modal with severity, description, affected versions, fix version. Filter by CVE severity.</td>
+            <td class="px-4 py-4 text-xs">Red Hat Security Data API integration. CVE cache (24h TTL). New endpoints: <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/api/v1/cves</code>, <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/api/v1/cves/{operator}</code></td>
+          </tr>
+
+          <!-- PHASE C: OPERATIONS -->
+
+          <!-- Feature 40 - IN PROGRESS -->
+          <tr class="hover:bg-gray-850/50 transition bg-blue-950/20">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">40</td>
+            <td class="px-4 py-4 font-bold text-white">Resource Usage Tracking</td>
+            <td class="px-4 py-4 text-gray-400">Real-time CPU/Memory usage per operator from Prometheus. Display current usage, requests/limits, 7-day trends, per-pod breakdown, cost estimation.</td>
+            <td class="px-4 py-4">
+              <span class="bg-blue-900 border border-blue-700 text-blue-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">In Progress</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">5 SP</td>
+            <td class="px-4 py-4 text-xs">Resource usage bars on cards. Resource details modal with historical chart (Chart.js). Trend indicators (up/down/stable).</td>
+            <td class="px-4 py-4 text-xs">Prometheus client integration. New endpoints: <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/api/v1/metrics/resources</code>, <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/api/v1/metrics/resources/{operator}/history</code></td>
+          </tr>
+
+          <!-- Feature 41 - IN PROGRESS -->
+          <tr class="hover:bg-gray-850/50 transition bg-blue-950/20">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">41</td>
+            <td class="px-4 py-4 font-bold text-white">Change History & Audit Log</td>
+            <td class="px-4 py-4 text-gray-400">Track all operator lifecycle events: install, upgrade (success/failure), approval, channel change, restart, delete. Timeline view per operator and global audit log.</td>
+            <td class="px-4 py-4">
+              <span class="bg-blue-900 border border-blue-700 text-blue-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">In Progress</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">5 SP</td>
+            <td class="px-4 py-4 text-xs">Audit log card with filtering. Per-operator history view. Timeline visualization. Event search and export.</td>
+            <td class="px-4 py-4 text-xs">Kubernetes Watch API for event detection. Event storage (in-memory ring buffer or SQLite). New endpoints: <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/api/v1/audit/events</code></td>
+          </tr>
+
+          <!-- PHASE D: VISUALIZATION -->
+
+          <!-- Feature 42 - IN PROGRESS -->
+          <tr class="hover:bg-gray-850/50 transition bg-blue-950/20">
+            <td class="px-4 py-4 text-center font-mono text-gray-500">42</td>
+            <td class="px-4 py-4 font-bold text-white">Operator Dependency Graph</td>
+            <td class="px-4 py-4 text-gray-400">Interactive graph showing operator dependencies (CRD providers/consumers, service dependencies). Impact analysis: "What breaks if I remove X?" with upgrade order suggestions.</td>
+            <td class="px-4 py-4">
+              <span class="bg-blue-900 border border-blue-700 text-blue-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">In Progress</span>
+            </td>
+            <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">8 SP</td>
+            <td class="px-4 py-4 text-xs">vis.js graph visualization with hierarchical layout. Node hover tooltips. Click for impact analysis modal. Export as PNG.</td>
+            <td class="px-4 py-4 text-xs">Dependency analyzer matching CRD providers/consumers. New endpoints: <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/api/v1/dependencies/graph</code>, <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/api/v1/dependencies/impact/{operator}</code></td>
+          </tr>
+
+          <!-- EXISTING PLANNED FEATURES -->
           <tr class="hover:bg-gray-850/50 transition">
             <td class="px-4 py-4 text-center font-mono text-gray-500">35/td>
             <td class="px-4 py-4 font-bold text-white">Operator Dependency Drift Detector</td>
