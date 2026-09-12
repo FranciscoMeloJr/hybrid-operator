@@ -14,6 +14,18 @@ const CACHE_TTL_MS = 30000;
 const AUTONOMOUS_MODE_KEY = 'autonomous_mode_enabled';
 let autonomousModeEnabled = true;
 
+// Collapsible sections state
+const SECTIONS_STATE_KEY = 'sections_collapse_state';
+let sectionsState = {
+  anomalyBannerContent: true,
+  lifecycleSection: true,
+  sankeySection: true,
+  healthSection: true,
+  utilizationSection: true,
+  chartsSection: true,
+  operatorGridSection: true
+};
+
 function updateRefreshInterval() {
   const selectEl = document.getElementById('refreshInterval');
   if (selectEl) {
@@ -113,10 +125,10 @@ async function fetchTargets(forceRefresh = false) {
     
     currentOperatorData = data.operators || [];
     currentAnomalies = data.anomalies || [];
-    
+
     const ocpCurrent = data.ocp_current_version || "Unknown";
     const ocpNext = data.ocp_next_version || "Unknown";
-    
+
     if (document.getElementById('ocpCurrentBadge')) {
         document.getElementById('ocpCurrentBadge').textContent = `OCP v${ocpCurrent}`;
     }
@@ -125,6 +137,14 @@ async function fetchTargets(forceRefresh = false) {
     }
 
     updateMetrics(currentOperatorData);
+    updateOLMHealthStatus(data);
+
+    // Save snapshot and render Sankey
+    if (data.upgrade_flow) {
+      saveSankeySnapshot(data.upgrade_flow);
+      renderSankeyDiagram(data.upgrade_flow);
+    }
+
     renderCharts(currentOperatorData);
     renderGrid(currentOperatorData);
 
@@ -174,6 +194,7 @@ function updateMetrics(operators) {
   const overloadedCount = operators.filter(op => (op.restarts && op.restarts > 5) || op.oom_killed).length;
   const pendingCount = operators.filter(op => op.approval_status === 'RequiresApproval').length;
   const orphanedCount = operators.filter(op => op.has_orphans).length;
+  const routesCount = operators.filter(op => op.exposed_routes && op.exposed_routes.length > 0).length;
 
   const packageGroups = {};
   operators.forEach(op => {
@@ -204,6 +225,7 @@ function updateMetrics(operators) {
   setMetric('metricOverloaded', overloadedCount);
   setMetric('metricPending', pendingCount);
   setMetric('metricOrphaned', orphanedCount);
+  setMetric('metricRoutes', routesCount);
 }
 
 function openMetricModal(type) {
@@ -311,15 +333,90 @@ function openMetricModal(type) {
       break;
     case 'conflict':
       title = '🚨 Cross-Namespace Conflicts';
-      desc = 'Operators installed multiple times across different namespaces causing OLM split-brain.';
+      desc = 'Operators installed multiple times across different namespaces causing OLM split-brain. Each group below represents operators with the same package name that conflict.';
       const pkgCounts = {};
-      currentOperatorData.forEach(op => { 
+      currentOperatorData.forEach(op => {
         const pkg = getNormalizedPackageName(op);
-        pkgCounts[pkg] = (pkgCounts[pkg] || 0) + 1; 
+        pkgCounts[pkg] = (pkgCounts[pkg] || 0) + 1;
       });
       ops = currentOperatorData.filter(op => pkgCounts[getNormalizedPackageName(op)] > 1);
       color = 'text-red-400';
       borderClass = 'hover:border-red-500/50';
+      isCustomRender = true;
+
+      // Group conflicting operators by package name
+      const conflictGroups = {};
+      ops.forEach(op => {
+        const pkg = getNormalizedPackageName(op);
+        if (!conflictGroups[pkg]) {
+          conflictGroups[pkg] = [];
+        }
+        conflictGroups[pkg].push(op);
+      });
+
+      // Render grouped conflicts
+      if (Object.keys(conflictGroups).length === 0) {
+        listEl.innerHTML = `<li class="text-emerald-400 italic text-sm text-center py-6 bg-gray-950 rounded border border-gray-800">✓ Excellent! No cross-namespace conflicts detected.</li>`;
+      } else {
+        listEl.innerHTML = Object.keys(conflictGroups).sort().map(pkg => {
+          const group = conflictGroups[pkg];
+          const displayName = group[0].package || group[0].name || pkg;
+
+          return `
+            <li class="bg-gray-950 border border-red-800/50 rounded-lg overflow-hidden mb-4">
+              <!-- Group Header -->
+              <div class="bg-red-950/30 border-b border-red-800/50 p-3 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                  <span class="font-bold text-red-300 text-base">${displayName}</span>
+                </div>
+                <span class="bg-red-900/50 border border-red-700 text-red-300 text-xs px-2.5 py-1 rounded font-mono font-bold">
+                  ${group.length} Conflicting Instances
+                </span>
+              </div>
+
+              <!-- Conflicting Operators List -->
+              <div class="p-3 space-y-2">
+                ${group.map((op, idx) => `
+                  <div class="bg-gray-900/50 border border-gray-800 p-3 rounded flex justify-between items-center hover:border-red-700/50 transition">
+                    <div class="flex-1">
+                      <div class="flex items-center gap-2">
+                        <span class="font-mono text-xs bg-red-950/50 border border-red-800/50 text-red-300 px-2 py-0.5 rounded font-bold">#${idx + 1}</span>
+                        <span class="font-semibold text-gray-200 text-sm">${op.name || op.package}</span>
+                      </div>
+                      <div class="flex items-center gap-4 mt-1.5 text-xs">
+                        <span class="text-gray-400 font-mono flex items-center gap-1">
+                          <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
+                          <span class="text-blue-400">${op.namespace}</span>
+                        </span>
+                        <span class="text-gray-500 font-mono flex items-center gap-1">
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"></path></svg>
+                          v${op.version || 'Unknown'}
+                        </span>
+                        <span class="text-gray-500 font-mono flex items-center gap-1">
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                          ${op.phase || 'Unknown'}
+                        </span>
+                      </div>
+                    </div>
+                    <div class="ml-3">
+                      ${op.channel ? `<span class="text-xs bg-gray-800 border border-gray-700 text-gray-400 px-2 py-1 rounded font-mono">${op.channel}</span>` : ''}
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+
+              <!-- Conflict Resolution Hint -->
+              <div class="bg-amber-950/20 border-t border-amber-800/50 p-3 flex items-start gap-2">
+                <svg class="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <div class="text-xs text-amber-200/80">
+                  <span class="font-semibold text-amber-300">Resolution:</span> Remove all but one instance. Keep the operator in the namespace where its Custom Resources are deployed, or use AllNamespaces install mode if cluster-wide management is needed.
+                </div>
+              </div>
+            </li>
+          `;
+        }).join('');
+      }
       break;
     case 'degraded':
       title = '❌ Degraded / Failed';
@@ -354,6 +451,66 @@ function openMetricModal(type) {
       ops = currentOperatorData.filter(op => op.has_orphans);
       color = 'text-stone-400';
       borderClass = 'hover:border-stone-500/50';
+      break;
+    case 'routes':
+      title = '🌐 External Routes';
+      desc = 'Operators and their operands exposing external OpenShift Routes accessible outside the cluster. These represent ingress points that may require security review.';
+      ops = currentOperatorData.filter(op => op.exposed_routes && op.exposed_routes.length > 0);
+      color = 'text-blue-400';
+      borderClass = 'hover:border-blue-500/50';
+      isCustomRender = true;
+
+      // Custom rendering for routes with grouped display
+      if (ops.length === 0) {
+        listEl.innerHTML = `<li class="text-gray-500 italic text-sm text-center py-6 bg-gray-950 rounded border border-gray-800">No external routes detected.</li>`;
+      } else {
+        listEl.innerHTML = ops.map(op => {
+          const routeList = op.exposed_routes.map(route => {
+            // Parse route format: "host (ns: namespace)" or just "host"
+            const routeMatch = route.match(/^(.+?)\s*\(ns:\s*(.+?)\)$/);
+            const host = routeMatch ? routeMatch[1].trim() : route;
+            const ns = routeMatch ? routeMatch[2].trim() : op.namespace;
+
+            return `
+              <div class="bg-gray-900/50 border border-gray-800 p-2.5 rounded flex items-center justify-between hover:border-blue-600/50 transition group">
+                <div class="flex items-center gap-2 flex-1 min-w-0">
+                  <svg class="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+                  <a href="https://${host}" target="_blank" class="text-blue-400 hover:text-blue-300 font-mono text-xs truncate group-hover:underline">${host}</a>
+                </div>
+                <span class="text-[10px] font-mono text-gray-500 bg-gray-950 px-2 py-0.5 rounded border border-gray-800 ml-2 flex-shrink-0">${ns}</span>
+              </div>
+            `;
+          }).join('');
+
+          return `
+            <li class="bg-gray-950 border border-gray-800 rounded-lg overflow-hidden mb-3">
+              <!-- Operator Header -->
+              <div class="bg-blue-950/30 border-b border-blue-800/50 p-3 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                  <span class="font-bold text-blue-300 text-base">${op.name || op.package}</span>
+                </div>
+                <span class="bg-blue-900/50 border border-blue-700 text-blue-300 text-xs px-2.5 py-1 rounded font-mono font-bold">
+                  ${op.exposed_routes.length} Route${op.exposed_routes.length > 1 ? 's' : ''}
+                </span>
+              </div>
+
+              <!-- Routes List -->
+              <div class="p-3 space-y-2">
+                ${routeList}
+              </div>
+
+              <!-- Security Notice -->
+              <div class="bg-amber-950/20 border-t border-amber-800/50 p-3 flex items-start gap-2">
+                <svg class="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                <div class="text-xs text-amber-200/80">
+                  <span class="font-semibold text-amber-300">Security Note:</span> These routes expose services externally. Ensure proper authentication, TLS certificates, and network policies are in place.
+                </div>
+              </div>
+            </li>
+          `;
+        }).join('');
+      }
       break;
   }
 
@@ -404,9 +561,31 @@ function closeMetricModal() {
   const modal = document.getElementById('unifiedModal');
   const content = document.getElementById('unifiedModalContent');
   if (!modal || !content) return;
-  
+
   modal.classList.add('opacity-0');
   content.classList.add('scale-95');
+  setTimeout(() => {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }, 200);
+}
+
+function openLogoModal() {
+  const modal = document.getElementById('logoModal');
+  if (!modal) return;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  setTimeout(() => {
+    modal.classList.remove('opacity-0');
+  }, 10);
+}
+
+function closeLogoModal() {
+  const modal = document.getElementById('logoModal');
+  if (!modal) return;
+
+  modal.classList.add('opacity-0');
   setTimeout(() => {
     modal.classList.add('hidden');
     modal.classList.remove('flex');
@@ -416,6 +595,531 @@ function closeMetricModal() {
 // ============================================================================
 // CHARTS & GRID RENDERING
 // ============================================================================
+function updateOLMHealthStatus(data) {
+  if (!data || !data.olm_health) {
+    console.log('[OLM Health] No health data available, setting defaults');
+
+    // Set default "no data" state
+    const olmOpStatus = document.getElementById('olmOperatorStatus');
+    if (olmOpStatus) olmOpStatus.textContent = 'N/A';
+
+    const catOpStatus = document.getElementById('catalogOperatorStatus');
+    if (catOpStatus) catOpStatus.textContent = 'N/A';
+
+    const ipSummary = document.getElementById('installPlanSummary');
+    if (ipSummary) ipSummary.textContent = 'N/A';
+
+    const csSummary = document.getElementById('catalogSourceSummary');
+    if (csSummary) csSummary.textContent = 'N/A';
+
+    const healthBadge = document.getElementById('olmHealthBadge');
+    if (healthBadge) {
+      healthBadge.textContent = 'NO DATA';
+      healthBadge.className = 'bg-gray-800 border border-gray-700 text-gray-400 text-[10px] px-2 py-0.5 rounded font-mono font-bold';
+    }
+
+    // Still update anomaly count if available
+    const anomalyCount = (data && data.anomalies && data.anomalies.length) || 0;
+    const anomalyCountEl = document.getElementById('olmAnomalyCount');
+    if (anomalyCountEl) {
+      anomalyCountEl.textContent = anomalyCount;
+    }
+
+    return;
+  }
+
+  const health = data.olm_health;
+
+  // Update anomaly count
+  const anomalyCount = (data.anomalies && data.anomalies.length) || 0;
+  const anomalyCountEl = document.getElementById('olmAnomalyCount');
+  if (anomalyCountEl) {
+    anomalyCountEl.textContent = anomalyCount;
+  }
+
+  // Update health badge
+  const healthBadge = document.getElementById('olmHealthBadge');
+  if (healthBadge) {
+    if (anomalyCount === 0 && health.olm_operator_status === 'Running' && health.catalog_operator_status === 'Running') {
+      healthBadge.textContent = 'HEALTHY';
+      healthBadge.className = 'bg-emerald-950 border border-emerald-800 text-emerald-400 text-[10px] px-2 py-0.5 rounded font-mono font-bold';
+    } else if (anomalyCount > 0) {
+      healthBadge.textContent = 'ACTION REQUIRED';
+      healthBadge.className = 'bg-amber-950 border border-amber-800 text-amber-400 text-[10px] px-2 py-0.5 rounded font-mono font-bold animate-pulse';
+    } else {
+      healthBadge.textContent = 'WARNING';
+      healthBadge.className = 'bg-orange-950 border border-orange-800 text-orange-400 text-[10px] px-2 py-0.5 rounded font-mono font-bold';
+    }
+  }
+
+  // Update OLM Operator status
+  const olmOpStatus = document.getElementById('olmOperatorStatus');
+  if (olmOpStatus) {
+    olmOpStatus.textContent = health.olm_operator_status || 'Unknown';
+    olmOpStatus.className = getStatusClass(health.olm_operator_status);
+  }
+
+  // Update Catalog Operator status
+  const catOpStatus = document.getElementById('catalogOperatorStatus');
+  if (catOpStatus) {
+    catOpStatus.textContent = health.catalog_operator_status || 'Unknown';
+    catOpStatus.className = getStatusClass(health.catalog_operator_status);
+  }
+
+  // Update InstallPlan summary
+  const ipSummary = document.getElementById('installPlanSummary');
+  if (ipSummary) {
+    const total = health.installplan_count || 0;
+    const pending = health.installplan_pending || 0;
+    const failed = health.installplan_failed || 0;
+
+    if (total === 0) {
+      ipSummary.textContent = '0 Plans';
+      ipSummary.className = 'text-gray-500 font-bold bg-gray-800/50 px-2 py-0.5 rounded text-[10px]';
+    } else if (failed > 0) {
+      ipSummary.textContent = `${total} Total (${failed} Failed)`;
+      ipSummary.className = 'text-red-400 font-bold bg-red-950/50 px-2 py-0.5 rounded text-[10px]';
+    } else if (pending > 0) {
+      ipSummary.textContent = `${total} Total (${pending} Pending)`;
+      ipSummary.className = 'text-amber-400 font-bold bg-amber-950/50 px-2 py-0.5 rounded text-[10px]';
+    } else {
+      ipSummary.textContent = `${total} Total`;
+      ipSummary.className = 'text-emerald-400 font-bold bg-emerald-950/50 px-2 py-0.5 rounded text-[10px]';
+    }
+  }
+
+  // Update CatalogSource summary
+  const csSummary = document.getElementById('catalogSourceSummary');
+  if (csSummary) {
+    const total = health.catalogsource_count || 0;
+    const ready = health.catalogsource_ready || 0;
+    const failed = health.catalogsource_failed || 0;
+
+    if (total === 0) {
+      csSummary.textContent = '0 Sources';
+      csSummary.className = 'text-gray-500 font-bold bg-gray-800/50 px-2 py-0.5 rounded text-[10px]';
+    } else if (failed > 0) {
+      csSummary.textContent = `${ready}/${total} Ready (${failed} Failed)`;
+      csSummary.className = 'text-red-400 font-bold bg-red-950/50 px-2 py-0.5 rounded text-[10px]';
+    } else if (ready < total) {
+      csSummary.textContent = `${ready}/${total} Ready`;
+      csSummary.className = 'text-amber-400 font-bold bg-amber-950/50 px-2 py-0.5 rounded text-[10px]';
+    } else {
+      csSummary.textContent = `${ready}/${total} Ready`;
+      csSummary.className = 'text-emerald-400 font-bold bg-emerald-950/50 px-2 py-0.5 rounded text-[10px]';
+    }
+  }
+
+  console.log('[OLM Health] Updated:', health);
+}
+
+function getStatusClass(status) {
+  if (!status) return 'text-gray-500 font-bold bg-gray-800/50 px-2 py-0.5 rounded text-[10px]';
+
+  if (status === 'Running') {
+    return 'text-emerald-400 font-bold bg-emerald-950/50 px-2 py-0.5 rounded text-[10px]';
+  } else if (status.includes('Degraded') || status.includes('CrashLoop')) {
+    return 'text-red-400 font-bold bg-red-950/50 px-2 py-0.5 rounded text-[10px]';
+  } else if (status === 'NotReady' || status === 'Pending') {
+    return 'text-amber-400 font-bold bg-amber-950/50 px-2 py-0.5 rounded text-[10px]';
+  } else if (status === 'NotFound' || status === 'Unknown') {
+    return 'text-gray-500 font-bold bg-gray-800/50 px-2 py-0.5 rounded text-[10px]';
+  } else {
+    return 'text-blue-400 font-bold bg-blue-950/50 px-2 py-0.5 rounded text-[10px]';
+  }
+}
+
+// Store current upgrade flow data and history
+let currentUpgradeFlow = null;
+const SANKEY_HISTORY_KEY = 'sankey_history';
+const MAX_HISTORY_ITEMS = 10;
+
+function saveSankeySnapshot(upgradeFlow) {
+  if (!upgradeFlow || !upgradeFlow.nodes || upgradeFlow.nodes.length === 0) return;
+
+  const history = getSankeyHistory();
+  const snapshot = {
+    timestamp: Date.now(),
+    data: upgradeFlow,
+    label: new Date().toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  };
+
+  // Add to beginning of array (newest first)
+  history.unshift(snapshot);
+
+  // Keep only last MAX_HISTORY_ITEMS
+  if (history.length > MAX_HISTORY_ITEMS) {
+    history.splice(MAX_HISTORY_ITEMS);
+  }
+
+  localStorage.setItem(SANKEY_HISTORY_KEY, JSON.stringify(history));
+  renderHistoryTimeline();
+}
+
+function getSankeyHistory() {
+  const stored = localStorage.getItem(SANKEY_HISTORY_KEY);
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch (e) {
+      console.error('Failed to parse Sankey history:', e);
+      return [];
+    }
+  }
+  return [];
+}
+
+function loadSankeySnapshot(index) {
+  const history = getSankeyHistory();
+  if (index >= 0 && index < history.length) {
+    const snapshot = history[index];
+    renderSankeyDiagram(snapshot.data);
+    renderHistoryTimeline(index);
+  }
+}
+
+function clearSankeyHistory() {
+  if (confirm('Clear all Sankey history snapshots?')) {
+    localStorage.removeItem(SANKEY_HISTORY_KEY);
+    renderHistoryTimeline();
+    // Re-render current state
+    if (currentUpgradeFlow) {
+      renderSankeyDiagram(currentUpgradeFlow);
+    }
+  }
+}
+
+function renderHistoryTimeline(activeIndex = 0) {
+  const timeline = document.getElementById('sankeyHistoryTimeline');
+  if (!timeline) return;
+
+  const history = getSankeyHistory();
+
+  if (history.length === 0) {
+    timeline.innerHTML = '<div class="text-xs text-gray-500 italic">No snapshots yet - data will be captured on each refresh</div>';
+    return;
+  }
+
+  timeline.innerHTML = history.map((snapshot, index) => {
+    const isActive = index === activeIndex;
+    const isCurrent = index === 0;
+    const activeClass = isActive ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700';
+    const currentBadge = isCurrent ? '<span class="ml-1 text-[10px] bg-green-600 px-1 rounded">CURRENT</span>' : '';
+
+    return `
+      <button
+        onclick="loadSankeySnapshot(${index})"
+        class="${activeClass} text-xs px-3 py-1.5 rounded transition whitespace-nowrap"
+        title="Snapshot from ${snapshot.label}"
+      >
+        ${snapshot.label}${currentBadge}
+      </button>
+    `;
+  }).join('');
+}
+
+function renderSankeyDiagram(upgradeFlow) {
+  const container = document.getElementById('sankeyDiagram');
+  if (!container) return;
+
+  // Store for re-rendering
+  currentUpgradeFlow = upgradeFlow;
+
+  if (!upgradeFlow || !upgradeFlow.nodes || upgradeFlow.nodes.length === 0) {
+    container.innerHTML = '<div class="flex items-center justify-center h-64 text-gray-500"><p>No upgrade flow data available</p></div>';
+    return;
+  }
+
+  // Check if container is visible
+  if (container.offsetWidth === 0) {
+    return; // Will re-render when expanded
+  }
+
+  // Clear previous content
+  container.innerHTML = '';
+
+  // Set up dimensions with better spacing
+  const margin = {top: 20, right: 150, bottom: 20, left: 150};
+  const width = Math.max(800, container.clientWidth) - margin.left - margin.right;
+  const nodeCount = upgradeFlow.nodes.length;
+  const height = Math.max(300, nodeCount * 60) - margin.top - margin.bottom;
+
+  // Create SVG
+  const svg = d3.select(container)
+    .append('svg')
+    .attr('width', width + margin.left + margin.right)
+    .attr('height', height + margin.top + margin.bottom)
+    .append('g')
+    .attr('transform', `translate(${margin.left},${margin.top})`);
+
+  // Build node and link data structures for d3-sankey
+  // Use node.id as the unique identifier (not index)
+  const graph = {
+    nodes: upgradeFlow.nodes.map(n => ({
+      name: n.id,           // Use ID as name for D3
+      label: n.label,       // Keep label for display
+      category: n.category
+    })),
+    links: upgradeFlow.links.map(l => ({
+      source: l.source,     // Source node ID (string)
+      target: l.target,     // Target node ID (string)
+      value: l.value,
+      type: l.type,
+      operators: l.operators
+    }))
+  };
+
+  // Create Sankey generator with better spacing
+  const sankey = d3.sankey()
+    .nodeId(d => d.name)    // Use 'name' field which contains the ID
+    .nodeWidth(20)
+    .nodePadding(40)
+    .nodeAlign(d3.sankeyLeft)
+    .extent([[0, 0], [width, height]]);
+
+  // Generate the Sankey layout
+  const {nodes, links} = sankey(graph);
+
+  // Color mapping
+  const colorMap = {
+    'minor': '#10b981',   // Green
+    'patch': '#10b981',   // Green
+    'major': '#f59e0b',   // Orange
+    'blocked': '#ef4444', // Red
+    'uptodate': '#6b7280' // Gray
+  };
+
+  const nodeColorMap = {
+    'current': '#3b82f6',  // Blue
+    'target': '#10b981',   // Green
+    'blocked': '#ef4444',  // Red
+    'safe': '#6b7280'      // Gray
+  };
+
+  // Draw links with gradient
+  const defs = svg.append('defs');
+
+  links.forEach((link, i) => {
+    const gradient = defs.append('linearGradient')
+      .attr('id', `gradient-${i}`)
+      .attr('gradientUnits', 'userSpaceOnUse')
+      .attr('x1', link.source.x1)
+      .attr('x2', link.target.x0);
+
+    gradient.append('stop')
+      .attr('offset', '0%')
+      .attr('stop-color', nodeColorMap[link.source.category] || '#6b7280');
+
+    gradient.append('stop')
+      .attr('offset', '100%')
+      .attr('stop-color', colorMap[link.type] || '#6b7280');
+  });
+
+  // Draw links
+  svg.append('g')
+    .selectAll('path')
+    .data(links)
+    .join('path')
+    .attr('d', d3.sankeyLinkHorizontal())
+    .attr('stroke', (d, i) => `url(#gradient-${i})`)
+    .attr('stroke-width', d => Math.max(2, d.width))
+    .attr('fill', 'none')
+    .attr('opacity', 0.6)
+    .style('cursor', 'pointer')
+    .on('mouseover', function(event, d) {
+      d3.select(this)
+        .attr('opacity', 0.9)
+        .attr('stroke-width', d => Math.max(2, d.width) + 2);
+      showSankeyTooltip(event, d);
+    })
+    .on('mousemove', function(event, d) {
+      updateSankeyTooltipPosition(event);
+    })
+    .on('mouseout', function(event, d) {
+      d3.select(this)
+        .attr('opacity', 0.6)
+        .attr('stroke-width', d => Math.max(2, d.width));
+      hideSankeyTooltip();
+    });
+
+  // Draw nodes
+  svg.append('g')
+    .selectAll('rect')
+    .data(nodes)
+    .join('rect')
+    .attr('x', d => d.x0)
+    .attr('y', d => d.y0)
+    .attr('height', d => Math.max(1, d.y1 - d.y0))
+    .attr('width', d => d.x1 - d.x0)
+    .attr('fill', d => nodeColorMap[d.category] || '#6b7280')
+    .attr('stroke', '#1f2937')
+    .attr('stroke-width', 2)
+    .attr('rx', 2);
+
+  // Add node labels with better positioning
+  svg.append('g')
+    .selectAll('text')
+    .data(nodes)
+    .join('text')
+    .attr('x', d => d.x0 < width / 2 ? d.x1 + 8 : d.x0 - 8)
+    .attr('y', d => (d.y1 + d.y0) / 2)
+    .attr('dy', '0.35em')
+    .attr('text-anchor', d => d.x0 < width / 2 ? 'start' : 'end')
+    .attr('fill', '#e5e7eb')
+    .style('font-size', '13px')
+    .style('font-weight', '500')
+    .text(d => d.label || d.name);
+
+  // Add column headers
+  svg.append('text')
+    .attr('x', 0)
+    .attr('y', -5)
+    .attr('fill', '#9ca3af')
+    .style('font-size', '11px')
+    .style('font-weight', '600')
+    .text('CURRENT VERSIONS');
+
+  svg.append('text')
+    .attr('x', width)
+    .attr('y', -5)
+    .attr('text-anchor', 'end')
+    .attr('fill', '#9ca3af')
+    .style('font-size', '11px')
+    .style('font-weight', '600')
+    .text('UPGRADE TARGETS');
+}
+
+function showSankeyTooltip(event, link) {
+  // Remove existing tooltip if any
+  hideSankeyTooltip();
+
+  const tooltip = document.createElement('div');
+  tooltip.id = 'sankeyTooltip';
+  tooltip.className = 'fixed bg-gray-800 border-2 border-gray-600 rounded-lg shadow-2xl p-4 text-sm z-50 max-w-sm';
+  tooltip.style.pointerEvents = 'none';
+
+  const typeLabels = {
+    'minor': 'Minor Upgrade',
+    'patch': 'Patch Upgrade',
+    'major': 'Major Upgrade',
+    'blocked': 'Blocked / Requires Approval',
+    'uptodate': 'Up-to-Date'
+  };
+
+  const typeColors = {
+    'minor': 'text-green-400',
+    'patch': 'text-green-400',
+    'major': 'text-orange-400',
+    'blocked': 'text-red-400',
+    'uptodate': 'text-gray-400'
+  };
+
+  const operatorListItems = link.operators.slice(0, 8).map(op =>
+    `<div class="text-gray-300 py-0.5">• ${op}</div>`
+  ).join('');
+
+  const moreCount = link.operators.length > 8 ? `<div class="text-gray-500 text-xs mt-1">+ ${link.operators.length - 8} more...</div>` : '';
+
+  tooltip.innerHTML = `
+    <div class="flex items-center justify-between mb-2 pb-2 border-b border-gray-700">
+      <div class="font-bold text-white text-base">${link.value} Operator${link.value > 1 ? 's' : ''}</div>
+      <div class="${typeColors[link.type]} font-semibold text-xs uppercase tracking-wide">${typeLabels[link.type]}</div>
+    </div>
+    <div class="text-xs text-gray-400 mb-2">Operators in this flow:</div>
+    <div class="max-h-40 overflow-y-auto text-xs space-y-0.5">
+      ${operatorListItems}
+      ${moreCount}
+    </div>
+  `;
+
+  // Add to DOM first to get dimensions
+  document.body.appendChild(tooltip);
+
+  // Smart positioning - keep tooltip within viewport
+  const tooltipRect = tooltip.getBoundingClientRect();
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const scrollX = window.scrollX || window.pageXOffset;
+  const scrollY = window.scrollY || window.pageYOffset;
+
+  // Calculate initial position (right and below cursor)
+  let left = event.clientX + 15;
+  let top = event.clientY + 15;
+
+  // Adjust if tooltip goes off right edge
+  if (left + tooltipRect.width > viewportWidth - 20) {
+    left = event.clientX - tooltipRect.width - 15; // Show on left side of cursor
+  }
+
+  // Adjust if tooltip goes off bottom edge
+  if (top + tooltipRect.height > viewportHeight - 20) {
+    top = event.clientY - tooltipRect.height - 15; // Show above cursor
+  }
+
+  // Ensure tooltip doesn't go off left edge
+  if (left < 20) {
+    left = 20;
+  }
+
+  // Ensure tooltip doesn't go off top edge
+  if (top < 20) {
+    top = 20;
+  }
+
+  // Apply final position
+  tooltip.style.left = left + 'px';
+  tooltip.style.top = top + 'px';
+}
+
+function updateSankeyTooltipPosition(event) {
+  const tooltip = document.getElementById('sankeyTooltip');
+  if (!tooltip) return;
+
+  const tooltipRect = tooltip.getBoundingClientRect();
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+
+  // Calculate initial position (right and below cursor)
+  let left = event.clientX + 15;
+  let top = event.clientY + 15;
+
+  // Adjust if tooltip goes off right edge
+  if (left + tooltipRect.width > viewportWidth - 20) {
+    left = event.clientX - tooltipRect.width - 15;
+  }
+
+  // Adjust if tooltip goes off bottom edge
+  if (top + tooltipRect.height > viewportHeight - 20) {
+    top = event.clientY - tooltipRect.height - 15;
+  }
+
+  // Ensure tooltip doesn't go off left edge
+  if (left < 20) {
+    left = 20;
+  }
+
+  // Ensure tooltip doesn't go off top edge
+  if (top < 20) {
+    top = 20;
+  }
+
+  // Apply position
+  tooltip.style.left = left + 'px';
+  tooltip.style.top = top + 'px';
+}
+
+function hideSankeyTooltip() {
+  const tooltip = document.getElementById('sankeyTooltip');
+  if (tooltip) {
+    tooltip.remove();
+  }
+}
+
 function renderCharts(operators) {
   const total = operators.length;
   const upgradeable = operators.filter(op => op.can_upgrade).length;
@@ -829,6 +1533,80 @@ function loadAutonomousMode() {
   console.log('Autonomous mode loaded:', autonomousModeEnabled ? 'ENABLED' : 'DISABLED');
 }
 
+function toggleSection(sectionId) {
+  const section = document.getElementById(sectionId);
+  const chevron = document.getElementById(`chevron-${sectionId}`);
+
+  if (!section) return;
+
+  const isCollapsed = section.style.maxHeight === '0px' || section.style.display === 'none';
+
+  if (isCollapsed) {
+    // Expand
+    if (sectionId === 'anomalyBannerContent') {
+      section.style.display = 'block';
+    } else {
+      section.style.display = 'grid';
+    }
+    section.style.maxHeight = section.scrollHeight + 'px';
+    if (chevron) chevron.classList.remove('rotate-180');
+    sectionsState[sectionId] = true;
+
+    // Re-render Sankey diagram when expanded
+    if (sectionId === 'sankeySection' && currentUpgradeFlow) {
+      setTimeout(() => renderSankeyDiagram(currentUpgradeFlow), 100);
+    }
+  } else {
+    // Collapse
+    section.style.maxHeight = '0px';
+    setTimeout(() => {
+      if (section.style.maxHeight === '0px') {
+        section.style.display = 'none';
+      }
+    }, 300);
+    if (chevron) chevron.classList.add('rotate-180');
+    sectionsState[sectionId] = false;
+  }
+
+  // Save state
+  localStorage.setItem(SECTIONS_STATE_KEY, JSON.stringify(sectionsState));
+}
+
+function loadSectionsState() {
+  const stored = localStorage.getItem(SECTIONS_STATE_KEY);
+  if (stored) {
+    try {
+      sectionsState = JSON.parse(stored);
+    } catch (e) {
+      console.error('Failed to parse sections state:', e);
+    }
+  }
+
+  // Apply saved state to all sections
+  Object.keys(sectionsState).forEach(sectionId => {
+    const section = document.getElementById(sectionId);
+    const chevron = document.getElementById(`chevron-${sectionId}`);
+
+    if (!section) return;
+
+    if (sectionsState[sectionId]) {
+      // Expanded
+      if (sectionId === 'anomalyBannerContent') {
+        section.style.display = 'block';
+      } else {
+        section.style.display = 'grid';
+      }
+      section.style.maxHeight = 'none';
+      if (chevron) chevron.classList.remove('rotate-180');
+    } else {
+      // Collapsed
+      section.style.display = 'none';
+      section.style.maxHeight = '0px';
+      if (chevron) chevron.classList.add('rotate-180');
+    }
+  });
+}
+
 async function triggerRemediation(action, namespace, target) {
   // Check if autonomous mode is enabled
   if (!autonomousModeEnabled) {
@@ -1007,5 +1785,7 @@ async function dispatchToNSAA() {
 
 document.addEventListener('DOMContentLoaded', () => {
   loadAutonomousMode();
+  loadSectionsState();
+  renderHistoryTimeline();
   fetchTargets(false);
 });
