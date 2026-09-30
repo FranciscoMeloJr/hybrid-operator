@@ -26,6 +26,7 @@ spec:
         app: console-hybrid-app
     spec:
       serviceAccountName: hybrid-intelligent-operator-sa
+      {{- if .Values.targetNode }}
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -35,6 +36,7 @@ spec:
                     operator: In
                     values:
                       - {{ .Values.targetNode }}
+      {{- end }}
       containers:
         - name: go-operator
           image: {{ .Values.registry }}/{{ .Release.Namespace }}/hybrid-operator:latest

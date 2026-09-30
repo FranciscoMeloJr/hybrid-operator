@@ -16,8 +16,10 @@ metadata:
   name: hybrid-operator
   namespace: {{ .Release.Namespace }}
 spec:
+  {{- if .Values.targetNode }}
   nodeSelector:
     kubernetes.io/hostname: {{ .Values.targetNode }}
+  {{- end }}
   source:
     type: Binary
   strategy:
@@ -40,8 +42,10 @@ metadata:
   name: dashboard
   namespace: {{ .Release.Namespace }}
 spec:
+  {{- if .Values.targetNode }}
   nodeSelector:
     kubernetes.io/hostname: {{ .Values.targetNode }}
+  {{- end }}
   source:
     type: Binary
   strategy:

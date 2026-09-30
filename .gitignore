@@ -7,7 +7,12 @@ __pycache__/
 # Go
 operator/bin/
 operator/manager
+operator/hybrid-operator
 
-# 
+# Scripts and CRDs
+gcloud-claude.sh
+keycloak-crd.yaml
+
+#
 *.json
 values.yaml

@@ -8,6 +8,29 @@ NAMESPACE="hybrid-apps"
 BRANCH_NAME="feat/helm-chart"
 CHART_PATH="./charts/hybrid-operator"
 COMPONENT=""
+TARGET_NODE_OVERRIDE=""
+
+# ==============================================================================
+# Parse Command Line Flags (MUST happen before .env load)
+# ==============================================================================
+usage() {
+    echo "Usage: $0 [-n namespace] [-c component] [-t target-node] [-h]"
+    echo "  -n  Specify target namespace (default: hybrid-apps)"
+    echo "  -c  Fast build specific component: 'dashboard' or 'hybrid-operator'"
+    echo "  -t  Specify target node (overrides .env TARGET_NODE, use 'none' to skip node affinity)"
+    echo "  -h  Show this help message"
+    exit 1
+}
+
+while getopts "n:c:t:h" opt; do
+    case ${opt} in
+        n ) NAMESPACE=$OPTARG ;;
+        c ) COMPONENT=$OPTARG ;;
+        t ) TARGET_NODE_OVERRIDE=$OPTARG ;;
+        h ) usage ;;
+        ? ) usage ;;
+    esac
+done
 
 # Load environment variables from .env
 if [ -f .env ]; then
@@ -18,30 +41,22 @@ else
     exit 1
 fi
 
-if [ -z "$TARGET_NODE" ]; then
-    echo "--> ERROR: TARGET_NODE is not defined in .env"
-    exit 1
+# Handle TARGET_NODE - Default to NO node affinity (safe by default)
+# Only use node affinity if explicitly provided via -t flag
+if [ -n "$TARGET_NODE_OVERRIDE" ]; then
+    if [ "$TARGET_NODE_OVERRIDE" = "none" ]; then
+        echo "--> INFO: No node affinity - pods will schedule on any available node"
+        TARGET_NODE=""
+    else
+        echo "--> INFO: Using target node from command-line: $TARGET_NODE_OVERRIDE"
+        TARGET_NODE="$TARGET_NODE_OVERRIDE"
+    fi
+else
+    # DEFAULT: Ignore TARGET_NODE from .env, schedule on any node
+    echo "--> INFO: No target node specified - pods will schedule on any available node"
+    echo "--> TIP: Use -t <node-name> to pin to a specific node"
+    TARGET_NODE=""
 fi
-
-# ==============================================================================
-# Parse Command Line Flags
-# ==============================================================================
-usage() {
-    echo "Usage: $0 [-n namespace] [-c component] [-h]"
-    echo "  -n  Specify target namespace (default: hybrid-apps)"
-    echo "  -c  Fast build specific component: 'dashboard' or 'hybrid-operator'"
-    echo "  -h  Show this help message"
-    exit 1
-}
-
-while getopts "n:c:h" opt; do
-    case ${opt} in
-        n ) NAMESPACE=$OPTARG ;;
-        c ) COMPONENT=$OPTARG ;;
-        h ) usage ;;
-        ? ) usage ;;
-    esac
-done
 
 # ==============================================================================
 # Core Functions
@@ -61,11 +76,20 @@ deploy_helm_chart() {
     oc get project "$NAMESPACE" >/dev/null 2>&1 || oc new-project "$NAMESPACE"
 
     echo "--> Upgrading/Installing Helm release..."
-    helm upgrade --install hybrid-operator "$CHART_PATH" \
-      --namespace "$NAMESPACE" \
-      --set targetNode="${TARGET_NODE}" \
-      --set secrets.adminPass="${ADMIN_PASS}" \
-      --set secrets.flaskSecret="${FLASK_SECRET}"
+    if [ -n "$TARGET_NODE" ]; then
+        echo "--> Using target node: $TARGET_NODE"
+        helm upgrade --install hybrid-operator "$CHART_PATH" \
+          --namespace "$NAMESPACE" \
+          --set targetNode="${TARGET_NODE}" \
+          --set secrets.adminPass="${ADMIN_PASS}" \
+          --set secrets.flaskSecret="${FLASK_SECRET}"
+    else
+        echo "--> No target node specified - scheduling on any available node"
+        helm upgrade --install hybrid-operator "$CHART_PATH" \
+          --namespace "$NAMESPACE" \
+          --set secrets.adminPass="${ADMIN_PASS}" \
+          --set secrets.flaskSecret="${FLASK_SECRET}"
+    fi
 }
 
 build_images_and_wait() {
