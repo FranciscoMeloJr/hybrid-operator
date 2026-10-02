@@ -1790,6 +1790,13 @@ function toggleAutonomousMode(enabled) {
   // Update UI to reflect state
   applyAutonomousModeState();
 
+  // Start/stop the background NSAA telemetry sync with the toggle.
+  if (enabled) {
+    startNsaaAutoSync();
+  } else {
+    stopNsaaAutoSync();
+  }
+
   const statusMsg = enabled
     ? '✓ Autonomous remediation actions are now ENABLED'
     : '⊗ Autonomous remediation actions are now DISABLED';
@@ -1833,6 +1840,11 @@ function loadAutonomousMode() {
   }
 
   console.log('Autonomous mode loaded:', autonomousModeEnabled ? 'ENABLED' : 'DISABLED');
+
+  // Honor the restored state: begin auto-syncing immediately if enabled.
+  if (autonomousModeEnabled) {
+    startNsaaAutoSync();
+  }
 }
 
 function toggleSection(sectionId) {
@@ -2083,6 +2095,48 @@ async function dispatchToNSAA() {
     } catch (err) {
         alert("Network error while reaching NSAA dispatcher: " + err);
     }
+}
+
+// ---------------------------------------------------------------------------
+// NSAA auto-sync loop (Feature 24): while autonomous mode is enabled, push
+// live inventory telemetry to the server-configured NSAA endpoint on an
+// interval. The endpoint is fixed server-side (SSRF-safe), so no prompt. The
+// loop is started/stopped by the autonomous toggle; failures are logged, not
+// alerted, so a background sync never interrupts the operator.
+// ---------------------------------------------------------------------------
+const NSAA_AUTO_SYNC_INTERVAL_MS = 60000;
+let nsaaSyncTimer = null;
+
+async function syncToNSAA() {
+  try {
+    const response = await fetch('/api/v1/nsaa/dispatch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ method: 'POST' })
+    });
+    const result = await response.json();
+    if (response.ok) {
+      console.log(`[NSAA auto-sync] delivered to ${result.target_url} (status ${result.nsaa_status_code})`);
+    } else {
+      console.warn(`[NSAA auto-sync] dispatch failed: ${result.error}`);
+    }
+  } catch (err) {
+    console.warn('[NSAA auto-sync] network error:', err);
+  }
+}
+
+function startNsaaAutoSync() {
+  if (nsaaSyncTimer) return; // already running
+  console.log('[NSAA auto-sync] started');
+  syncToNSAA(); // fire immediately, then on interval
+  nsaaSyncTimer = setInterval(syncToNSAA, NSAA_AUTO_SYNC_INTERVAL_MS);
+}
+
+function stopNsaaAutoSync() {
+  if (!nsaaSyncTimer) return;
+  clearInterval(nsaaSyncTimer);
+  nsaaSyncTimer = null;
+  console.log('[NSAA auto-sync] stopped');
 }
 
 // Export Modal Functions
