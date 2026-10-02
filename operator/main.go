@@ -535,6 +535,23 @@ func handleGetOperatorCVEs(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Operator not found", http.StatusNotFound)
 }
 
+// handleGetCVESources reports which real CVE data sources are available in this
+// cluster (the CVE-source spike), along with a summary of the collected image
+// fleet it would scan. Read-only; used to choose a live integration.
+func handleGetCVESources(w http.ResponseWriter, r *http.Request, dynClient dynamic.Interface) {
+	cacheLock.RLock()
+	var images []collector.ImageRef
+	for _, op := range opCache.Operators {
+		images = append(images, op.Images...)
+	}
+	cacheLock.RUnlock()
+
+	report := collector.ProbeCVESources(r.Context(), dynClient, images)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(report)
+}
+
 // Dependency Graph API Handlers
 func handleGetDependencyGraph(w http.ResponseWriter, r *http.Request) {
 	cacheLock.RLock()
@@ -618,6 +635,9 @@ func main() {
 		})
 		http.HandleFunc("/api/v1/cves", handleGetAllCVEs)
 		http.HandleFunc("/api/v1/cves/", handleGetOperatorCVEs)
+		http.HandleFunc("/api/v1/security/cve-sources", func(w http.ResponseWriter, r *http.Request) {
+			handleGetCVESources(w, r, dynClient)
+		})
 		http.HandleFunc("/api/v1/audit/events", handleGetAuditEvents)
 		http.HandleFunc("/api/v1/dependencies/graph", handleGetDependencyGraph)
 		http.HandleFunc("/api/v1/dependencies/impact/", handleGetImpactAnalysis)

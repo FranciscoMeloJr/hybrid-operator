@@ -111,6 +111,7 @@ type OperatorInfo struct {
     HealthScore      int                 `json:"health_score"`
     CVEs             []CVEInfo           `json:"cves"`
     CVECount         int                 `json:"cve_count"`
+    Images           []ImageRef          `json:"images"`
 }
 
 type CVEInfo struct {
@@ -474,6 +475,11 @@ func GetClusterGovernance(ctx context.Context, dynClient dynamic.Interface) (Clu
                 })
             }
         }
+
+        // Collect the real container image references for this operator and its
+        // operands. Images (by digest) are the unit CVE scanners key on, so this
+        // is the foundation for any live vulnerability lookup.
+        op.Images = collectImages(ctx, dynClient, namespace, crNamespaces)
 
         if op.Version == "" {
             installedVer := parseSemver(installedCSV)

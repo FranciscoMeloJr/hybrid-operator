@@ -251,6 +251,11 @@ def proxy_operator_dependencies(operator=None):
 def proxy_operator_audit():
     return _proxy_to_operator()
 
+@app.route('/api/v1/security/cve-sources')
+@requires_auth
+def proxy_operator_cve_sources():
+    return _proxy_to_operator()
+
 @app.route('/help')
 @requires_auth
 def help_page():
