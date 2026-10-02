@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -13,6 +14,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -196,6 +198,52 @@ func handleGetCSVYAML(w http.ResponseWriter, r *http.Request, dynClient dynamic.
 	json.NewEncoder(w).Encode(obj.Object)
 }
 
+// handleChangeChannel switches a Subscription's update channel (Feature 16).
+// It merge-patches spec.channel, which makes OLM resolve the operator against
+// the new channel (and, on a Manual approval strategy, generate a fresh
+// InstallPlan for approval). Returns the patched channel on success.
+func handleChangeChannel(w http.ResponseWriter, r *http.Request, dynClient dynamic.Interface) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Namespace string `json:"namespace"`
+		Name      string `json:"name"`
+		Channel   string `json:"channel"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	if req.Namespace == "" || req.Name == "" || req.Channel == "" {
+		http.Error(w, "Missing namespace, name, or channel", http.StatusBadRequest)
+		return
+	}
+
+	patch := []byte(fmt.Sprintf(`{"spec":{"channel":%q}}`, req.Channel))
+	gvr := collector.SubscriptionsGVR()
+	_, err := dynClient.Resource(gvr).Namespace(req.Namespace).Patch(
+		context.Background(), req.Name, types.MergePatchType, patch, metav1.PatchOptions{},
+	)
+
+	w.Header().Set("Content-Type", "application/json")
+	if err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("Failed to switch channel: %v", err),
+		})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"channel": req.Channel,
+		"message": fmt.Sprintf("Subscription %s/%s switched to channel %q", req.Namespace, req.Name, req.Channel),
+	})
+}
+
 // CVE API Handlers
 func handleGetAllCVEs(w http.ResponseWriter, r *http.Request) {
 	cacheLock.RLock()
@@ -310,6 +358,9 @@ func main() {
 		})
 		http.HandleFunc("/api/v1/actions/delete", func(w http.ResponseWriter, r *http.Request) {
 			handleDeleteSubscription(w, r, dynClient)
+		})
+		http.HandleFunc("/api/v1/actions/change-channel", func(w http.ResponseWriter, r *http.Request) {
+			handleChangeChannel(w, r, dynClient)
 		})
 		http.HandleFunc("/api/v1/resources/subscription", func(w http.ResponseWriter, r *http.Request) {
 			handleGetSubscriptionYAML(w, r, dynClient)

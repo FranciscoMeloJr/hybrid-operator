@@ -1649,6 +1649,12 @@ function renderGrid(operators) {
                 </svg>
                 Restart Pod
               </button>
+              <button onclick="quickActionChangeChannel('${op.namespace}', '${op.name || op.package}', '${op.channel || ''}')" class="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition flex items-center gap-2">
+                <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                </svg>
+                Switch Channel
+              </button>
               <button onclick="quickActionCopyYAML('${op.namespace}', '${op.name || op.package}', 'subscription')" class="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition flex items-center gap-2">
                 <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
@@ -2450,6 +2456,41 @@ async function quickActionRestartPod(namespace, name) {
 
     const result = await response.json();
     alert(result.success ? `✓ ${result.message}` : `✗ ${result.message}`);
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+async function quickActionChangeChannel(namespace, name, currentChannel) {
+  const promptMsg = currentChannel
+    ? `Switch update channel for ${name}\n\nCurrent channel: ${currentChannel}\n\nEnter the new channel:`
+    : `Switch update channel for ${name}\n\nEnter the new channel:`;
+  const channel = prompt(promptMsg, currentChannel || '');
+
+  if (channel === null) return; // cancelled
+  const trimmed = channel.trim();
+  if (!trimmed) {
+    alert('Channel cannot be empty');
+    return;
+  }
+  if (trimmed === currentChannel) {
+    alert('Channel unchanged');
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/v1/actions/change-channel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ namespace, name, channel: trimmed })
+    });
+
+    const result = await response.json();
+    alert(result.success ? `✓ ${result.message}` : `✗ ${result.message}`);
+
+    if (result.success) {
+      setTimeout(() => location.reload(), 1000);
+    }
   } catch (err) {
     alert('Error: ' + err.message);
   }

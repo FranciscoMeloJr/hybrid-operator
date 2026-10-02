@@ -227,6 +227,7 @@ def _proxy_to_operator():
 @app.route('/api/v1/actions/approve', methods=['POST'])
 @app.route('/api/v1/actions/restart-pod', methods=['POST'])
 @app.route('/api/v1/actions/delete', methods=['POST'])
+@app.route('/api/v1/actions/change-channel', methods=['POST'])
 @requires_auth
 def proxy_operator_actions():
     return _proxy_to_operator()
