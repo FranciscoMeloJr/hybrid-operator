@@ -6,6 +6,7 @@ import datetime
 import logging
 import requests
 from functools import wraps
+from urllib.parse import urlsplit
 from flask import Flask, jsonify, request, send_from_directory, render_template, render_template_string, redirect, url_for, session, make_response
 
 logging.basicConfig(level=logging.INFO)
@@ -28,6 +29,12 @@ app.permanent_session_lifetime = datetime.timedelta(minutes=30)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 GO_INVENTORY_URL = os.getenv("GO_INVENTORY_URL", "http://127.0.0.1:8080/api/v1/inventory")
 NSAA_DEFAULT_ENDPOINT = os.getenv("NSAA_ENDPOINT_URL", "http://nsaa-agent-service.nsaa-system.svc:8000/api/v1/telemetry")
+
+# Base URL of the in-pod Go operator API (same host/port as the inventory feed).
+# The Go operator serves action/resource/dependency endpoints on 127.0.0.1:8080
+# but is not exposed externally, so the dashboard proxies to it.
+_inv = urlsplit(GO_INVENTORY_URL)
+OPERATOR_BASE_URL = os.getenv("GO_OPERATOR_URL", f"{_inv.scheme}://{_inv.netloc}")
 
 # Build / version metadata. APP_GIT_SHA and APP_BUILD_TIME are stamped into the
 # image at build time (Dockerfile ARG -> ENV, populated by the deploy scripts);
@@ -196,6 +203,45 @@ def dispatch_to_nsaa():
     except Exception as e:
         logger.error(f"Failed to dispatch telemetry to NSAA at {target_url}: {e}")
         return jsonify({"error": f"Failed to connect to NSAA endpoint: {str(e)}"}), 502
+
+# =============================================================================
+# OPERATOR API PROXY
+# The Go operator serves these endpoints on 127.0.0.1:8080 (not externally
+# routable). The frontend calls them on the dashboard origin, so we forward the
+# same path through to the operator and relay its response. All require auth
+# because several are mutating actions (approve / restart / delete).
+# =============================================================================
+def _proxy_to_operator():
+    target = f"{OPERATOR_BASE_URL}{request.path}"
+    try:
+        if request.method == 'POST':
+            resp = requests.post(target, json=request.get_json(silent=True) or {}, timeout=10)
+        else:
+            resp = requests.get(target, params=request.args, timeout=10)
+    except Exception as e:
+        logger.error(f"Operator proxy to {target} failed: {e}")
+        return jsonify({"error": f"Failed to reach operator backend: {str(e)}"}), 502
+    content_type = resp.headers.get('Content-Type', 'application/json')
+    return (resp.content, resp.status_code, [("Content-Type", content_type)])
+
+@app.route('/api/v1/actions/approve', methods=['POST'])
+@app.route('/api/v1/actions/restart-pod', methods=['POST'])
+@app.route('/api/v1/actions/delete', methods=['POST'])
+@requires_auth
+def proxy_operator_actions():
+    return _proxy_to_operator()
+
+@app.route('/api/v1/resources/subscription')
+@app.route('/api/v1/resources/csv')
+@requires_auth
+def proxy_operator_resources():
+    return _proxy_to_operator()
+
+@app.route('/api/v1/dependencies/graph')
+@app.route('/api/v1/dependencies/impact/<path:operator>')
+@requires_auth
+def proxy_operator_dependencies(operator=None):
+    return _proxy_to_operator()
 
 @app.route('/help')
 @requires_auth
