@@ -85,37 +85,39 @@ setup_git_branch() {
 }
 
 deploy_helm_chart() {
+    compute_build_metadata
+
     echo "--> Ensuring OpenShift project exists: ${NAMESPACE}"
     oc get project "$NAMESPACE" >/dev/null 2>&1 || oc new-project "$NAMESPACE"
 
-    echo "--> Upgrading/Installing Helm release..."
+    echo "--> Upgrading/Installing Helm release (build sha=${GIT_SHA})..."
     if [ -n "$TARGET_NODE" ]; then
         echo "--> Using target node: $TARGET_NODE"
         helm upgrade --install hybrid-operator "$CHART_PATH" \
           --namespace "$NAMESPACE" \
           --set targetNode="${TARGET_NODE}" \
           --set secrets.adminPass="${ADMIN_PASS}" \
-          --set secrets.flaskSecret="${FLASK_SECRET}"
+          --set secrets.flaskSecret="${FLASK_SECRET}" \
+          --set release.gitSha="${GIT_SHA}" \
+          --set release.buildTime="${BUILD_TIME}"
     else
         echo "--> No target node specified - scheduling on any available node"
         helm upgrade --install hybrid-operator "$CHART_PATH" \
           --namespace "$NAMESPACE" \
           --set secrets.adminPass="${ADMIN_PASS}" \
-          --set secrets.flaskSecret="${FLASK_SECRET}"
+          --set secrets.flaskSecret="${FLASK_SECRET}" \
+          --set release.gitSha="${GIT_SHA}" \
+          --set release.buildTime="${BUILD_TIME}"
     fi
 }
 
 build_images_and_wait() {
-    compute_build_metadata
-
     echo "--> Starting Go Operator container build (in background)..."
     oc start-build hybrid-operator --from-dir=./operator --follow -n "$NAMESPACE" &
     PID_OPERATOR=$!
 
     echo "--> Starting Web Dashboard container build (in background)..."
-    oc start-build dashboard --from-dir=./dashboard \
-      --build-arg=GIT_SHA="$GIT_SHA" --build-arg=BUILD_TIME="$BUILD_TIME" \
-      --follow -n "$NAMESPACE" &
+    oc start-build dashboard --from-dir=./dashboard --follow -n "$NAMESPACE" &
     PID_DASHBOARD=$!
 
     echo "--> Waiting for both builds to complete..."
@@ -168,6 +170,9 @@ elif [ "$COMPONENT" == "dashboard" ] || [ "$COMPONENT" == "hybrid-operator" ]; t
     echo " Fast Build: $COMPONENT only ($NAMESPACE)"
     echo "=================================================="
     oc start-build "$COMPONENT" --from-dir="./${COMPONENT/hybrid-operator/operator}" --follow -n "$NAMESPACE"
+    # Refresh the deployed version metadata (commit + timestamp) so /version and
+    # the UI header reflect this rebuild, then roll out the new image.
+    deploy_helm_chart
     verify_rollout
 
 else

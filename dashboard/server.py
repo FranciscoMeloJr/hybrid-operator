@@ -29,6 +29,21 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 GO_INVENTORY_URL = os.getenv("GO_INVENTORY_URL", "http://127.0.0.1:8080/api/v1/inventory")
 NSAA_DEFAULT_ENDPOINT = os.getenv("NSAA_ENDPOINT_URL", "http://nsaa-agent-service.nsaa-system.svc:8000/api/v1/telemetry")
 
+# Build / version metadata. APP_GIT_SHA and APP_BUILD_TIME are stamped into the
+# image at build time (Dockerfile ARG -> ENV, populated by the deploy scripts);
+# they default to "unknown" for local runs. Exposed via /version and in the UI
+# header so a running deployment can be matched to the exact source it was built
+# from. Bump APP_VERSION on releases (or override via the APP_VERSION env var).
+APP_VERSION = os.getenv("APP_VERSION", "1.8.0-beta")
+GIT_SHA = os.getenv("APP_GIT_SHA", "unknown")
+BUILD_TIME = os.getenv("APP_BUILD_TIME", "unknown")
+
+
+@app.context_processor
+def inject_build_metadata():
+    """Makes build/version info available to every Jinja template."""
+    return {"app_version": APP_VERSION, "git_sha": GIT_SHA, "build_time": BUILD_TIME}
+
 # =============================================================================
 # AUTHENTICATION MIDDLEWARE & LOGIN ROUTES
 # =============================================================================
@@ -192,6 +207,17 @@ def help_page():
 def features_page():
     return render_template('features.html')
 
+@app.route('/version')
+def version():
+    """Unauthenticated build marker for verifying the deployed image.
+    Returns only non-sensitive build metadata (app version, git SHA, build time)
+    so `curl https://<route>/version` confirms exactly which source is running."""
+    return jsonify({
+        "version": APP_VERSION,
+        "git_sha": GIT_SHA,
+        "build_time": BUILD_TIME,
+    })
+
 @app.route('/api/v1/remediate', methods=['POST'])
 @requires_auth  # Uncomment if session authentication is enforced
 def handle_remediation():
@@ -227,4 +253,5 @@ def mock_nsaa_receiver():
 if __name__ == '__main__':
     port = int(os.getenv("DASHBOARD_PORT", "5005"))
     debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
+    logger.info(f"Starting Hybrid Console v{APP_VERSION} (sha={GIT_SHA}, built={BUILD_TIME}) on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)

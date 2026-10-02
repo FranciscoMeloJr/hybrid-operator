@@ -64,6 +64,15 @@ spec:
                 secretKeyRef:
                   name: console-hybrid-secrets
                   key: FLASK_SECRET
+            # Build/version metadata injected at deploy time (deploy-helm.sh passes
+            # release.gitSha / release.buildTime via --set). Surfaced at /version
+            # and in the UI header so the running deployment is traceable to source.
+            - name: APP_VERSION
+              value: {{ (.Values.release | default dict).version | default "1.8.0-beta" | quote }}
+            - name: APP_GIT_SHA
+              value: {{ (.Values.release | default dict).gitSha | default "unknown" | quote }}
+            - name: APP_BUILD_TIME
+              value: {{ (.Values.release | default dict).buildTime | default "unknown" | quote }}
           resources:
             requests:
               cpu: 100m

@@ -12,3 +12,12 @@ secrets:
 
 dashboard:
   port: 5005
+
+# Build/version metadata surfaced at /version and in the UI header.
+# `version` is the semantic release string (bump on releases); `gitSha` and
+# `buildTime` are overwritten on every deploy by deploy-helm.sh (--set), so the
+# running pod is always traceable to the exact commit it was deployed from.
+release:
+  version: "1.8.0-beta"
+  gitSha: "unknown"
+  buildTime: "unknown"

@@ -149,6 +149,7 @@ EOF
 # Function: deploy_application
 # ==============================================================================
 deploy_application() {
+    compute_build_metadata
     cat <<EOF | oc apply -f -
 apiVersion: v1
 kind: Secret
@@ -216,6 +217,14 @@ spec:
                 secretKeyRef:
                   name: console-hybrid-secrets
                   key: FLASK_SECRET
+            # Build/version metadata (commit + timestamp) injected at deploy time;
+            # surfaced at /version and in the UI header.
+            - name: APP_VERSION
+              value: "1.8.0-beta"
+            - name: APP_GIT_SHA
+              value: "${GIT_SHA}"
+            - name: APP_BUILD_TIME
+              value: "${BUILD_TIME}"
           resources:
             requests:
               cpu: 100m
@@ -249,6 +258,17 @@ spec:
     termination: edge
     insecureEdgeTerminationPolicy: Redirect
 EOF
+}
+
+# ==============================================================================
+# Function: compute_build_metadata
+# ==============================================================================
+# Capture git SHA + UTC timestamp to stamp into the dashboard image so the
+# running build is verifiable via /version. Call after any branch checkout.
+compute_build_metadata() {
+    GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    echo "--> Build metadata: sha=${GIT_SHA} time=${BUILD_TIME}"
 }
 
 # ==============================================================================
@@ -329,6 +349,8 @@ main() {
         echo " Fast Build: dashboard only"
         echo "=================================================="
         oc start-build dashboard --from-dir=./dashboard --follow -n "$NAMESPACE"
+        # Refresh the deployed version metadata (commit + timestamp) for this rebuild.
+        deploy_application
         verify_rollout
 
     elif [ "$TARGET_COMPONENT" == "hybrid-operator" ]; then
