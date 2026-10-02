@@ -2215,7 +2215,7 @@ async function exportAsPDF() {
       `Can Upgrade: ${filteredOperators.filter(op => op.can_upgrade).length}`,
       `Failed: ${filteredOperators.filter(op => op.phase === 'Failed').length}`,
       `Idle: ${filteredOperators.filter(op => op.is_idle).length}`,
-      `Average Health Score: ${Math.round(filteredOperators.reduce((sum, op) => sum + (op.health_score || 0), 0) / filteredOperators.length)}`,
+      `Average Health Score: ${filteredOperators.length ? Math.round(filteredOperators.reduce((sum, op) => sum + (op.health_score || 0), 0) / filteredOperators.length) : 0}`,
     ];
 
     let y = 52;
@@ -2290,7 +2290,7 @@ function toggleComparisonMode() {
 }
 
 function selectForComparison(opName) {
-  const index = selectedForComparison.findIndex(op => op.name === opName);
+  const index = selectedForComparison.findIndex(op => (op.name || op.package) === opName);
 
   if (index >= 0) {
     selectedForComparison.splice(index, 1);

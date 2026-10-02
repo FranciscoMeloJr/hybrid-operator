@@ -1,21 +1,28 @@
 import os
 import hashlib
+import hmac
 import json
-import secrets
 import datetime
 import logging
 import requests
 from functools import wraps
 from flask import Flask, jsonify, request, send_from_directory, render_template, render_template_string, redirect, url_for, session, make_response
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("brain-service")
 
 app = Flask(__name__)
 
 # Authentication & Session Settings
-app.secret_key = os.environ.get("FLASK_SECRET", secrets.token_hex(32))
-ADMIN_PASS = os.environ.get("ADMIN_PASS", "apotheosis-secure")
+# Both secrets are required; fail closed rather than shipping a known default
+# password / an ephemeral session key that silently invalidates sessions.
+app.secret_key = os.environ.get("FLASK_SECRET")
+ADMIN_PASS = os.environ.get("ADMIN_PASS")
+if not app.secret_key or not ADMIN_PASS:
+    raise RuntimeError(
+        "FLASK_SECRET and ADMIN_PASS environment variables are required. "
+        "Provide them via the deployment Secret (deploy-helm.sh) or a local .env file."
+    )
 app.permanent_session_lifetime = datetime.timedelta(minutes=30)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -76,7 +83,7 @@ def login():
     client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
     if request.method == 'POST':
         provided_pass = request.form.get('password', '')
-        if provided_pass == ADMIN_PASS:
+        if hmac.compare_digest(provided_pass, ADMIN_PASS):
             session['logged_in'] = True
             session['user'] = 'cluster-admin'
             session.permanent = True
@@ -145,8 +152,10 @@ def get_targets():
 @app.route('/api/v1/nsaa/dispatch', methods=['POST'])
 @requires_auth
 def dispatch_to_nsaa():
-    req_payload = request.get_json() or {}
-    target_url = req_payload.get('endpoint_url') or NSAA_DEFAULT_ENDPOINT
+    req_payload = request.get_json(silent=True) or {}
+    # Target is fixed to the server-configured endpoint to prevent SSRF via a
+    # client-supplied URL. Override only via the NSAA_ENDPOINT_URL env var.
+    target_url = NSAA_DEFAULT_ENDPOINT
     http_method = req_payload.get('method', 'POST').upper()
 
     try:
@@ -216,4 +225,6 @@ def mock_nsaa_receiver():
     return jsonify({"status": "Received", "message": "Telemetry processed by mock agent"}), 200
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5005, debug=True)
+    port = int(os.getenv("DASHBOARD_PORT", "5005"))
+    debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
+    app.run(host='0.0.0.0', port=port, debug=debug)

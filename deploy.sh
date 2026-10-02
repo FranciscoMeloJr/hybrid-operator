@@ -10,7 +10,9 @@ BRANCH_NAME="feat/multi-container-pod"
 # Load environment variables from .env
 if [ -f .env ]; then
     echo "--> Loading configuration from .env file..."
-    export $(grep -v '^#' .env | xargs)
+    set -a
+    . ./.env
+    set +a
 else
     echo "--> ERROR: .env file not found!"
     exit 1

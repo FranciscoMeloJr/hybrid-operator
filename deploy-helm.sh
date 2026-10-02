@@ -5,7 +5,7 @@ set -e
 # Global Defaults
 # ==============================================================================
 NAMESPACE="hybrid-apps"
-BRANCH_NAME="feat/helm-chart"
+BRANCH_NAME="${DEPLOY_BRANCH:-main}"   # default branch; override with -b flag or DEPLOY_BRANCH env var
 CHART_PATH="./charts/hybrid-operator"
 COMPONENT=""
 TARGET_NODE_OVERRIDE=""
@@ -14,19 +14,21 @@ TARGET_NODE_OVERRIDE=""
 # Parse Command Line Flags (MUST happen before .env load)
 # ==============================================================================
 usage() {
-    echo "Usage: $0 [-n namespace] [-c component] [-t target-node] [-h]"
+    echo "Usage: $0 [-n namespace] [-c component] [-t target-node] [-b branch] [-h]"
     echo "  -n  Specify target namespace (default: hybrid-apps)"
     echo "  -c  Fast build specific component: 'dashboard' or 'hybrid-operator'"
     echo "  -t  Specify target node (overrides .env TARGET_NODE, use 'none' to skip node affinity)"
+    echo "  -b  Git branch to deploy (default: main, or \$DEPLOY_BRANCH)"
     echo "  -h  Show this help message"
     exit 1
 }
 
-while getopts "n:c:t:h" opt; do
+while getopts "n:c:t:b:h" opt; do
     case ${opt} in
         n ) NAMESPACE=$OPTARG ;;
         c ) COMPONENT=$OPTARG ;;
         t ) TARGET_NODE_OVERRIDE=$OPTARG ;;
+        b ) BRANCH_NAME=$OPTARG ;;
         h ) usage ;;
         ? ) usage ;;
     esac
@@ -35,7 +37,9 @@ done
 # Load environment variables from .env
 if [ -f .env ]; then
     echo "--> Loading configuration from .env file..."
-    export $(grep -v '^#' .env | xargs)
+    set -a
+    . ./.env
+    set +a
 else
     echo "--> ERROR: .env file not found!"
     exit 1
@@ -61,6 +65,15 @@ fi
 # ==============================================================================
 # Core Functions
 # ==============================================================================
+# Capture git SHA + UTC timestamp to stamp into the dashboard image so the
+# running build is verifiable via /version. Call AFTER any branch checkout so
+# the SHA matches what is actually being built.
+compute_build_metadata() {
+    GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    echo "--> Build metadata: sha=${GIT_SHA} time=${BUILD_TIME}"
+}
+
 setup_git_branch() {
     if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
         echo "--> Switching to existing branch: $BRANCH_NAME"
@@ -93,12 +106,16 @@ deploy_helm_chart() {
 }
 
 build_images_and_wait() {
+    compute_build_metadata
+
     echo "--> Starting Go Operator container build (in background)..."
     oc start-build hybrid-operator --from-dir=./operator --follow -n "$NAMESPACE" &
     PID_OPERATOR=$!
 
     echo "--> Starting Web Dashboard container build (in background)..."
-    oc start-build dashboard --from-dir=./dashboard --follow -n "$NAMESPACE" &
+    oc start-build dashboard --from-dir=./dashboard \
+      --build-arg=GIT_SHA="$GIT_SHA" --build-arg=BUILD_TIME="$BUILD_TIME" \
+      --follow -n "$NAMESPACE" &
     PID_DASHBOARD=$!
 
     echo "--> Waiting for both builds to complete..."

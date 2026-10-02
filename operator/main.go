@@ -41,18 +41,23 @@ func inventoryHandler(w http.ResponseWriter, r *http.Request) {
 	defer cacheLock.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
-	if opCache.Operators == nil {
-		opCache.Operators = []collector.OperatorInfo{}
+	// Read shared cache fields into locals; do not mutate opCache here. This
+	// handler only holds a read lock, so concurrent requests would otherwise
+	// race when writing the nil->empty-slice normalization.
+	operators := opCache.Operators
+	if operators == nil {
+		operators = []collector.OperatorInfo{}
 	}
-	if opCache.Anomalies == nil {
-		opCache.Anomalies = []collector.AnomalyInfo{}
+	anomalies := opCache.Anomalies
+	if anomalies == nil {
+		anomalies = []collector.AnomalyInfo{}
 	}
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"ocp_current_version": opCache.OCPCurrentVersion,
 		"ocp_next_version":    opCache.OCPNextVersion,
-		"operators":           opCache.Operators,
+		"operators":           operators,
 		"total":               opCache.Total,
-		"anomalies":           opCache.Anomalies,
+		"anomalies":           anomalies,
 		"olm_health":          opCache.OLMHealth,
 		"upgrade_flow":        opCache.UpgradeFlow,
 	})

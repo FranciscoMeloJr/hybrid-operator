@@ -82,7 +82,7 @@ func EstimateMaintenanceWindow(op OperatorInfo, workerNodeCount int) string {
 	}
 
 	// Factor active CRs and worker node count
-	crImpactMinutes := (op.ActiveCRs * 15) / 60 // 15s rollout buffer per active CR
+	crImpactMinutes := (op.ActiveCRs*15 + 59) / 60 // 15s rollout buffer per active CR, rounded up to whole minutes
 	nodeFactor := workerNodeCount * 1           // 1 min per node rolling restart
 
 	totalMinutes := baseDurationMinutes + crImpactMinutes + nodeFactor
@@ -194,7 +194,9 @@ func ExecuteRemediationAction(ctx context.Context, dynClient dynamic.Interface, 
 		for _, ip := range ipList.Items {
 			approved, _, _ := unstructured.NestedBool(ip.Object, "spec", "approved")
 			if !approved {
-				unstructured.SetNestedField(ip.Object, true, "spec", "approved")
+				if err := unstructured.SetNestedField(ip.Object, true, "spec", "approved"); err != nil {
+					continue
+				}
 				_, errUpdate := dynClient.Resource(installPlanGVR).Namespace(namespace).Update(ctx, &ip, metav1.UpdateOptions{})
 				if errUpdate == nil {
 					result.Success = true

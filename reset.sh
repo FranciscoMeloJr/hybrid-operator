@@ -20,7 +20,7 @@ oc delete pods -l app=console-hybrid-app -n "$NAMESPACE" --force --grace-period=
 echo "--> 3. Deleting Build Resources (BuildConfigs, ImageStreams, Builds)..."
 oc delete bc hybrid-operator dashboard -n "$NAMESPACE" --ignore-not-found
 oc delete is hybrid-operator dashboard -n "$NAMESPACE" --ignore-not-found
-oc delete builds --all -n "$NAMESPACE"
+oc delete builds --all -n "$NAMESPACE" --ignore-not-found
 
 echo "--> 4. Deleting Service Account..."
 oc delete sa hybrid-intelligent-operator-sa -n "$NAMESPACE" --ignore-not-found

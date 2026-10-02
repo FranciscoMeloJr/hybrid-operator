@@ -19,7 +19,7 @@
           <span class="bg-emerald-900/50 border border-emerald-700 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">v1.8 Beta</span>
           <span class="bg-blue-900/50 border border-blue-700 text-blue-300 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Last Updated: September 2026</span>
         </div>
-        <p class="text-sm text-gray-400 mt-1">Feature Backlog & Implementation Status Matrix • 33 Completed • 18 In Progress</p>
+        <p class="text-sm text-gray-400 mt-1">Feature Backlog & Implementation Status Matrix • 27 Completed • 1 Partially Done • 9 In Progress • 12 Planned • 1 Research</p>
       </div>
     </div>
     
@@ -453,7 +453,7 @@
             <td class="px-4 py-4 text-xs">Extended Go collector to query Deployments, ServiceAccounts, and other operator-owned resources via GVR.</td>
           </tr>
 
-          <!-- Feature 32 - FUTURE -->
+          <!-- Feature 32 - COMPLETED -->
           <tr class="hover:bg-gray-850/50 transition">
             <td class="px-4 py-4 text-center font-mono text-gray-500">32</td>
             <td class="px-4 py-4 font-bold text-white">Operator Risk Score Engine</td>
@@ -604,9 +604,9 @@
             <td class="px-4 py-4 text-xs">Dependency analyzer matching CRD providers/consumers. New endpoints: <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/api/v1/dependencies/graph</code>, <code class="bg-gray-950 px-1 py-0.5 rounded text-gray-300">/api/v1/dependencies/impact/{operator}</code></td>
           </tr>
 
-          <!-- EXISTING PLANNED FEATURES -->
+          <!-- Feature 43 - PLANNED -->
           <tr class="hover:bg-gray-850/50 transition">
-            <td class="px-4 py-4 text-center font-mono text-gray-500">35/td>
+            <td class="px-4 py-4 text-center font-mono text-gray-500">43</td>
             <td class="px-4 py-4 font-bold text-white">Operator Dependency Drift Detector</td>
             <td class="px-4 py-4 text-gray-400">Detect when multiple operators require incompatible versions of shared CRDs or have circular dependency conflicts.</td>
             <td class="px-4 py-4">
@@ -617,9 +617,9 @@
             <td class="px-4 py-4 text-xs">Build dependency graph analyzer comparing required vs installed CRD versions across all operators.</td>
           </tr>
 
-          <!-- Feature 41 - FUTURE -->
+          <!-- Feature 44 - PLANNED -->
           <tr class="hover:bg-gray-850/50 transition">
-            <td class="px-4 py-4 text-center font-mono text-gray-500">35/td>
+            <td class="px-4 py-4 text-center font-mono text-gray-500">44</td>
             <td class="px-4 py-4 font-bold text-white">Automated Upgrade Orchestration</td>
             <td class="px-4 py-4 text-gray-400">Safe, staged operator upgrade workflows with pre-flight checks, rollback capability, and automatic approval for low-risk upgrades.</td>
             <td class="px-4 py-4">
@@ -630,9 +630,9 @@
             <td class="px-4 py-4 text-xs">Implement Go upgrade controller with pre-flight validation, staged rollout, health checks, and automatic rollback on failure.</td>
           </tr>
 
-          <!-- Feature 41 - FUTURE -->
+          <!-- Feature 45 - PLANNED -->
           <tr class="hover:bg-gray-850/50 transition">
-            <td class="px-4 py-4 text-center font-mono text-gray-500">36/td>
+            <td class="px-4 py-4 text-center font-mono text-gray-500">45</td>
             <td class="px-4 py-4 font-bold text-white">GitOps Integration & Change Tracking</td>
             <td class="px-4 py-4 text-gray-400">Audit trail of who changed what, when. Export operator configs to Git, track drift from declared state, and auto-sync capabilities.</td>
             <td class="px-4 py-4">
@@ -643,9 +643,9 @@
             <td class="px-4 py-4 text-xs">Integrate Git client library, implement audit log storage, and build diff engine comparing live vs declared state.</td>
           </tr>
 
-          <!-- Feature 41 - FUTURE -->
+          <!-- Feature 46 - PLANNED -->
           <tr class="hover:bg-gray-850/50 transition">
-            <td class="px-4 py-4 text-center font-mono text-gray-500">37/td>
+            <td class="px-4 py-4 text-center font-mono text-gray-500">46</td>
             <td class="px-4 py-4 font-bold text-white">Multi-Cluster Federation Dashboard</td>
             <td class="px-4 py-4 text-gray-400">Aggregate view across multiple OpenShift clusters showing operator versions, conflicts, and upgrade readiness in a unified pane.</td>
             <td class="px-4 py-4">
@@ -656,9 +656,9 @@
             <td class="px-4 py-4 text-xs">Implement multi-kubeconfig support, parallel cluster collectors, and federated data aggregation pipeline.</td>
           </tr>
 
-          <!-- Feature 41 - FUTURE -->
+          <!-- Feature 47 - PLANNED -->
           <tr class="hover:bg-gray-850/50 transition">
-            <td class="px-4 py-4 text-center font-mono text-gray-500">38/td>
+            <td class="px-4 py-4 text-center font-mono text-gray-500">47</td>
             <td class="px-4 py-4 font-bold text-white">Compliance & Policy Engine</td>
             <td class="px-4 py-4 text-gray-400">Enforce organizational policies: allowed operator versions, forbidden channels, required security contexts, CVE scanning integration.</td>
             <td class="px-4 py-4">
@@ -669,9 +669,9 @@
             <td class="px-4 py-4 text-xs">Implement OPA (Open Policy Agent) integration or custom policy engine evaluating operators against defined rules.</td>
           </tr>
 
-          <!-- Feature 41 - FUTURE -->
+          <!-- Feature 48 - PLANNED -->
           <tr class="hover:bg-gray-850/50 transition">
-            <td class="px-4 py-4 text-center font-mono text-gray-500">39/td>
+            <td class="px-4 py-4 text-center font-mono text-gray-500">48</td>
             <td class="px-4 py-4 font-bold text-white">Advanced Search & Filtering</td>
             <td class="px-4 py-4 text-gray-400">Full-text search across operators, CRDs, and CRs with advanced filters: namespace, version range, channel, status, risk score.</td>
             <td class="px-4 py-4">
@@ -682,9 +682,9 @@
             <td class="px-4 py-4 text-xs text-gray-500 italic">None (client-side filtering with optional backend indexing)</td>
           </tr>
 
-          <!-- Feature 41 - FUTURE -->
+          <!-- Feature 49 - PLANNED -->
           <tr class="hover:bg-gray-850/50 transition">
-            <td class="px-4 py-4 text-center font-mono text-gray-500">40/td>
+            <td class="px-4 py-4 text-center font-mono text-gray-500">49</td>
             <td class="px-4 py-4 font-bold text-white">Webhook & Event Integration</td>
             <td class="px-4 py-4 text-gray-400">Send notifications to Slack, Teams, PagerDuty on critical events: failed operators, blocked upgrades, security vulnerabilities detected.</td>
             <td class="px-4 py-4">
@@ -695,9 +695,9 @@
             <td class="px-4 py-4 text-xs">Implement Go event dispatcher with pluggable webhook backends (Slack, Teams, generic HTTP).</td>
           </tr>
 
-          <!-- Feature 41 - FUTURE -->
+          <!-- Feature 50 - RESEARCH -->
           <tr class="hover:bg-gray-850/50 transition">
-            <td class="px-4 py-4 text-center font-mono text-gray-500">41/td>
+            <td class="px-4 py-4 text-center font-mono text-gray-500">50</td>
             <td class="px-4 py-4 font-bold text-white">AI-Powered Upgrade Recommendations</td>
             <td class="px-4 py-4 text-gray-400">ML model analyzing cluster patterns, historical upgrade success rates, and community data to recommend optimal upgrade paths and timing.</td>
             <td class="px-4 py-4">

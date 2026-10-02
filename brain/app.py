@@ -148,7 +148,7 @@ def background_discovery_loop():
 # A. Pod Memory Telemetry (Workload Predictive Analysis)
 @app.route('/api/telemetry', methods=['POST'])
 def receive_telemetry():
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     pod_name = data.get('pod_name')
     current_mem = data.get('memory_mb')
     
