@@ -257,29 +257,9 @@ function openMetricModal(type) {
       color = 'text-amber-400';
       isCustomRender = true;
       
-      const renderAnomalies = (currentAnomalies && currentAnomalies.length > 0) ? currentAnomalies : [
-        {
-          type: 'Zombie CSV',
-          resource: 'amq-streams-operator.v2.2.0-5',
-          namespace: 'amq-streams',
-          description: 'ClusterServiceVersion exists without an active OLM Subscription. Will not receive security updates.',
-          action: 'PURGE_ZOMBIE_CSV'
-        },
-        {
-          type: 'Stuck Reconcile',
-          resource: 'rhdh-operator',
-          namespace: 'rhdh-operator-system',
-          description: 'Operator installation/reconcile loop is permanently blocked in phase: Failed.',
-          action: 'RESTART_CONTROLLER'
-        },
-        {
-          type: 'Catalog Source',
-          resource: 'redhat-operators',
-          namespace: 'openshift-marketplace',
-          description: 'CatalogSource pod is CrashLoopBackOff. gRPC connection to registry database is failing.',
-          action: 'RESTART_CATALOG_POD'
-        }
-      ];
+      // Render only real anomalies reported by the backend. A clean cluster
+      // must show the "System Healthy" state below, never fabricated samples.
+      const renderAnomalies = (currentAnomalies && currentAnomalies.length > 0) ? currentAnomalies : [];
 
       if (renderAnomalies.length === 0) {
         listEl.innerHTML = `<li class="text-emerald-400 italic text-sm text-center py-6 bg-gray-950 rounded border border-gray-800">✓ System Healthy: No silent OLM anomalies detected!</li>`;
