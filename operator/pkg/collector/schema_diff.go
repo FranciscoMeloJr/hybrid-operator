@@ -86,8 +86,14 @@ func AnalyzeCRDBreakingChanges(
 			continue
 		}
 
-		// Diff OpenAPI properties
-		removed, mutated := compareOpenAPISchemas(targetSchema)
+		// Diff the live (current) CRD schema against the target CSV schema.
+		// Without a current schema to compare against there is nothing to
+		// diff, so skip rather than report every field as removed.
+		currentSchema := getCurrentCRDSchema(ctx, dynClient, crd.Name, crd.Version)
+		if currentSchema == nil {
+			continue
+		}
+		removed, mutated := compareOpenAPISchemas(currentSchema, targetSchema)
 		result.RemovedFields = append(result.RemovedFields, removed...)
 		result.TypeMutations = append(result.TypeMutations, mutated...)
 
@@ -116,28 +122,111 @@ func AnalyzeCRDBreakingChanges(
 	return result
 }
 
-func compareOpenAPISchemas(targetSchema map[string]interface{}) ([]string, []string) {
+// crdGVR is the cluster-scoped GroupVersionResource for CRD definitions, used
+// to read the currently-installed openAPIV3Schema for an operator's CRDs.
+var crdGVR = schema.GroupVersionResource{
+	Group:    "apiextensions.k8s.io",
+	Version:  "v1",
+	Resource: "customresourcedefinitions",
+}
+
+// getCurrentCRDSchema fetches the live openAPIV3Schema for the named CRD at the
+// given served version. Returns nil if the CRD or version cannot be resolved,
+// in which case the caller skips the diff (no current baseline to compare).
+func getCurrentCRDSchema(ctx context.Context, dynClient dynamic.Interface, crdName, version string) map[string]interface{} {
+	obj, err := dynClient.Resource(crdGVR).Get(ctx, crdName, metav1.GetOptions{})
+	if err != nil {
+		return nil
+	}
+	versions, found, _ := unstructured.NestedSlice(obj.Object, "spec", "versions")
+	if !found {
+		return nil
+	}
+	for _, v := range versions {
+		vMap, ok := v.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name, _, _ := unstructured.NestedString(vMap, "name")
+		if name != version {
+			continue
+		}
+		if s, has, _ := unstructured.NestedMap(vMap, "schema", "openAPIV3Schema"); has {
+			return s
+		}
+	}
+	return nil
+}
+
+// specProperties returns the `.spec` property map of an openAPIV3Schema, or nil
+// if absent. The diff only considers spec fields since that is what user CRs set.
+func specProperties(schema map[string]interface{}) map[string]interface{} {
+	props, ok := schema["properties"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	spec, ok := props["spec"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	specProps, ok := spec["properties"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	return specProps
+}
+
+// compareOpenAPISchemas diffs the current CRD schema against the target schema
+// and returns (removedFields, typeMutations) as spec-relative dotted paths
+// (e.g. "replicas", "config.timeout"). A field present in the current spec but
+// missing from the target is a breaking removal; a field whose declared type
+// changes is a breaking mutation. If either schema lacks spec properties the
+// diff is skipped (returns empty) to avoid false positives when a target CSV
+// simply omits the embedded schema.
+func compareOpenAPISchemas(currentSchema, targetSchema map[string]interface{}) ([]string, []string) {
 	removedFields := make([]string, 0)
 	typeMutations := make([]string, 0)
 
-	var walkProps func(prefix string, targetProps map[string]interface{})
-	walkProps = func(prefix string, targetProps map[string]interface{}) {
-		for propName, val := range targetProps {
-			fieldPath := propName
-			if prefix != "" {
-				fieldPath = fmt.Sprintf("%s.%s", prefix, propName)
-			}
-			if propMap, ok := val.(map[string]interface{}); ok {
-				if nestedProps, ok := propMap["properties"].(map[string]interface{}); ok {
-					walkProps(fieldPath, nestedProps)
-				}
-			}
-		}
+	currentSpec := specProperties(currentSchema)
+	targetSpec := specProperties(targetSchema)
+	if currentSpec == nil || targetSpec == nil {
+		return removedFields, typeMutations
 	}
 
-	if targetProps, ok := targetSchema["properties"].(map[string]interface{}); ok {
-		walkProps("", targetProps)
+	var walk func(prefix string, cur, tgt map[string]interface{})
+	walk = func(prefix string, cur, tgt map[string]interface{}) {
+		for name, cRaw := range cur {
+			path := name
+			if prefix != "" {
+				path = fmt.Sprintf("%s.%s", prefix, name)
+			}
+			cMap, _ := cRaw.(map[string]interface{})
+			tRaw, inTarget := tgt[name]
+			if !inTarget {
+				removedFields = append(removedFields, path)
+				continue
+			}
+			tMap, _ := tRaw.(map[string]interface{})
+
+			cType, _ := cMap["type"].(string)
+			tType, _ := tMap["type"].(string)
+			if cType != "" && tType != "" && cType != tType {
+				typeMutations = append(typeMutations, fmt.Sprintf("%s (%s -> %s)", path, cType, tType))
+			}
+
+			cNested, cHas := cMap["properties"].(map[string]interface{})
+			if !cHas {
+				continue
+			}
+			tNested, tHas := tMap["properties"].(map[string]interface{})
+			if !tHas {
+				// Nested object collapsed in target: treat its children as removed.
+				tNested = map[string]interface{}{}
+			}
+			walk(path, cNested, tNested)
+		}
 	}
+	walk("", currentSpec, targetSpec)
 
 	return removedFields, typeMutations
 }
