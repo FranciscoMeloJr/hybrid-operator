@@ -245,6 +245,11 @@ def proxy_operator_resources():
 def proxy_operator_dependencies(operator=None):
     return _proxy_to_operator()
 
+@app.route('/api/v1/audit/events')
+@requires_auth
+def proxy_operator_audit():
+    return _proxy_to_operator()
+
 @app.route('/help')
 @requires_auth
 def help_page():

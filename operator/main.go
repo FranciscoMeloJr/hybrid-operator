@@ -41,6 +41,69 @@ var (
 	opCache   collector.ClusterGovernanceResponse
 )
 
+// AuditEvent records a single operator lifecycle action taken through this API.
+type AuditEvent struct {
+	Timestamp string `json:"timestamp"`
+	Type      string `json:"type"`
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+	Detail    string `json:"detail"`
+	Success   bool   `json:"success"`
+}
+
+// auditLog is an in-memory ring buffer of the most recent actions. It records
+// real events as they are performed (approve / channel change / restart /
+// delete); it is intentionally bounded and non-persistent (lost on restart).
+const auditLogCapacity = 500
+
+var (
+	auditLock sync.Mutex
+	auditLog  []AuditEvent
+)
+
+func recordAudit(eventType, namespace, name, detail string, success bool) {
+	auditLock.Lock()
+	defer auditLock.Unlock()
+	auditLog = append(auditLog, AuditEvent{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Type:      eventType,
+		Namespace: namespace,
+		Name:      name,
+		Detail:    detail,
+		Success:   success,
+	})
+	if len(auditLog) > auditLogCapacity {
+		auditLog = auditLog[len(auditLog)-auditLogCapacity:]
+	}
+}
+
+// handleGetAuditEvents returns recorded events newest-first, optionally filtered
+// by ?namespace= and ?name=.
+func handleGetAuditEvents(w http.ResponseWriter, r *http.Request) {
+	nsFilter := r.URL.Query().Get("namespace")
+	nameFilter := r.URL.Query().Get("name")
+
+	auditLock.Lock()
+	events := make([]AuditEvent, 0, len(auditLog))
+	for i := len(auditLog) - 1; i >= 0; i-- {
+		e := auditLog[i]
+		if nsFilter != "" && e.Namespace != nsFilter {
+			continue
+		}
+		if nameFilter != "" && e.Name != nameFilter {
+			continue
+		}
+		events = append(events, e)
+	}
+	auditLock.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"total":  len(events),
+		"events": events,
+	})
+}
+
 func inventoryHandler(w http.ResponseWriter, r *http.Request) {
 	cacheLock.RLock()
 	defer cacheLock.RUnlock()
@@ -92,6 +155,7 @@ func handleApproveUpgrade(w http.ResponseWriter, r *http.Request, dynClient dyna
 	}
 
 	result := collector.ExecuteRemediationAction(context.Background(), dynClient, "REAPPROVE_INSTALLPLAN", req.Namespace, req.Name)
+	recordAudit("approve", req.Namespace, req.Name, result.Message, result.Success)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
@@ -131,6 +195,8 @@ func handleRestartPod(w http.ResponseWriter, r *http.Request, clientset *kuberne
 		}
 	}
 
+	recordAudit("restart", req.Namespace, req.Name, message, success)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": success,
@@ -154,6 +220,7 @@ func handleDeleteSubscription(w http.ResponseWriter, r *http.Request, dynClient 
 	}
 
 	result := collector.ExecuteRemediationAction(context.Background(), dynClient, "PURGE_IDLE_SUBSCRIPTION", req.Namespace, req.Name)
+	recordAudit("delete", req.Namespace, req.Name, result.Message, result.Success)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
@@ -233,13 +300,16 @@ func handleChangeChannel(w http.ResponseWriter, r *http.Request, dynClient dynam
 
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
+		msg := fmt.Sprintf("Failed to switch channel: %v", err)
+		recordAudit("channel-change", req.Namespace, req.Name, msg, false)
 		w.WriteHeader(http.StatusBadGateway)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
-			"message": fmt.Sprintf("Failed to switch channel: %v", err),
+			"message": msg,
 		})
 		return
 	}
+	recordAudit("channel-change", req.Namespace, req.Name, fmt.Sprintf("channel -> %s", req.Channel), true)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"channel": req.Channel,
@@ -468,6 +538,7 @@ func main() {
 		})
 		http.HandleFunc("/api/v1/cves", handleGetAllCVEs)
 		http.HandleFunc("/api/v1/cves/", handleGetOperatorCVEs)
+		http.HandleFunc("/api/v1/audit/events", handleGetAuditEvents)
 		http.HandleFunc("/api/v1/dependencies/graph", handleGetDependencyGraph)
 		http.HandleFunc("/api/v1/dependencies/impact/", handleGetImpactAnalysis)
 		log.Println("[GO OPERATOR] Serving internal inventory API on 127.0.0.1:8080")

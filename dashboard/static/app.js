@@ -1663,6 +1663,12 @@ function renderGrid(operators) {
                 </svg>
                 Pod Metrics
               </button>
+              <button onclick="openAuditLog('${op.namespace}', '${op.name || op.package}')" class="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition flex items-center gap-2">
+                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Change History
+              </button>
               <button onclick="quickActionCopyYAML('${op.namespace}', '${op.name || op.package}', 'subscription')" class="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition flex items-center gap-2">
                 <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
@@ -2483,6 +2489,67 @@ function updateAnomalyBanner(count) {
   } else {
     banner.classList.add('hidden');
   }
+}
+
+// Audit Log viewer (Feature 41). Fetches recorded lifecycle actions (newest
+// first) and renders them in a self-contained modal. Optional namespace/name
+// scope the view to a single operator's change history.
+async function openAuditLog(namespace, name) {
+  let url = '/api/v1/audit/events';
+  const params = new URLSearchParams();
+  if (namespace) params.set('namespace', namespace);
+  if (name) params.set('name', name);
+  if ([...params].length) url += '?' + params.toString();
+
+  let data;
+  try {
+    const response = await fetch(url);
+    data = await response.json();
+  } catch (err) {
+    alert('Failed to load audit log: ' + err.message);
+    return;
+  }
+
+  const events = (data && data.events) || [];
+  const scope = name ? `${name}` : 'All operators';
+
+  const rows = events.length
+    ? events.map(e => `
+        <tr class="border-b border-gray-800">
+          <td class="px-3 py-2 font-mono text-xs text-gray-400 whitespace-nowrap">${e.timestamp}</td>
+          <td class="px-3 py-2"><span class="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded border ${e.success ? 'bg-emerald-950 text-emerald-300 border-emerald-800' : 'bg-red-950 text-red-300 border-red-800'}">${e.type}</span></td>
+          <td class="px-3 py-2 text-sm text-gray-200">${e.name}</td>
+          <td class="px-3 py-2 font-mono text-xs text-gray-500">${e.namespace}</td>
+          <td class="px-3 py-2 text-xs text-gray-400">${e.detail || ''}</td>
+        </tr>`).join('')
+    : `<tr><td colspan="5" class="px-3 py-8 text-center text-sm text-gray-500 italic">No recorded actions yet. Lifecycle actions (approve, channel change, restart, delete) appear here as they are performed.</td></tr>`;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="bg-gray-900 border border-gray-700 rounded-lg shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-gray-800">
+        <div>
+          <h3 class="text-gray-100 font-bold">Change History &amp; Audit Log</h3>
+          <p class="text-xs text-gray-500">${scope} • ${events.length} event${events.length === 1 ? '' : 's'}</p>
+        </div>
+        <button class="text-gray-400 hover:text-white text-xl leading-none" aria-label="Close">&times;</button>
+      </div>
+      <div class="overflow-auto">
+        <table class="w-full text-left">
+          <thead class="sticky top-0 bg-gray-950 text-[10px] uppercase tracking-wider text-gray-500">
+            <tr>
+              <th class="px-3 py-2">Time (UTC)</th><th class="px-3 py-2">Action</th>
+              <th class="px-3 py-2">Operator</th><th class="px-3 py-2">Namespace</th><th class="px-3 py-2">Detail</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  overlay.querySelector('button[aria-label="Close"]').onclick = () => overlay.remove();
+  document.body.appendChild(overlay);
 }
 
 async function quickActionPodMetrics(namespace, name) {
