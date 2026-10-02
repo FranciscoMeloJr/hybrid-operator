@@ -1663,6 +1663,12 @@ function renderGrid(operators) {
                 </svg>
                 Pod Metrics
               </button>
+              <button onclick="quickActionCost('${op.namespace}', '${op.name || op.package}')" class="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition flex items-center gap-2">
+                <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Cost Estimate
+              </button>
               <button onclick="openAuditLog('${op.namespace}', '${op.name || op.package}')" class="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition flex items-center gap-2">
                 <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -2550,6 +2556,30 @@ async function openAuditLog(namespace, name) {
     </div>`;
   overlay.querySelector('button[aria-label="Close"]').onclick = () => overlay.remove();
   document.body.appendChild(overlay);
+}
+
+async function quickActionCost(namespace, name) {
+  try {
+    const response = await fetch(`/api/v1/resources/cost?namespace=${encodeURIComponent(namespace)}&name=${encodeURIComponent(name)}`);
+    const r = await response.json();
+
+    if (!r.metrics_available) {
+      alert(`No cost estimate for ${name}.\n\n${r.message || 'Live metrics (metrics.k8s.io) are unavailable, so usage-based cost cannot be estimated.'}`);
+      return;
+    }
+
+    const fmt = (n) => Number(n).toFixed(4);
+    alert(
+      `💲 Cost Footprint (ESTIMATE) — ${name}\n\n` +
+      `Usage: ${fmt(r.cpu_cores)} vCPU, ${fmt(r.memory_gib)} GiB\n` +
+      `Rates: $${r.rates.cpu_core_hour}/vCPU-hr, $${r.rates.mem_gib_hour}/GiB-hr\n\n` +
+      `Hourly:  $${fmt(r.hourly_cost)}\n` +
+      `Monthly: $${Number(r.monthly_cost).toFixed(2)} ${r.currency}\n\n` +
+      `Estimate only — derived from live usage × configurable rates.`
+    );
+  } catch (err) {
+    alert('Error fetching cost estimate: ' + err.message);
+  }
 }
 
 async function quickActionPodMetrics(namespace, name) {

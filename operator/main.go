@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -338,51 +339,127 @@ func handleGetControllerMetrics(w http.ResponseWriter, r *http.Request, clientse
 		return
 	}
 
-	ctx := context.Background()
-	pods, err := clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
-		LabelSelector: "operators.coreos.com/" + name,
-	})
+	usage, err := gatherControllerUsage(context.Background(), clientset, dynClient, namespace, name)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
 		w.WriteHeader(http.StatusBadGateway)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"metrics_available": false,
-			"message":           fmt.Sprintf("Failed to list controller pods: %v", err),
+			"message":           err.Error(),
 		})
 		return
-	}
-
-	podStats := make([]map[string]interface{}, 0, len(pods.Items))
-	metricsAvailable := true
-	var totalCPUMilli, totalMemMi int64
-
-	for _, pod := range pods.Items {
-		pm, merr := dynClient.Resource(podMetricsGVR).Namespace(namespace).Get(ctx, pod.Name, metav1.GetOptions{})
-		if merr != nil {
-			// metrics API not installed, or usage not yet scraped for this pod.
-			metricsAvailable = false
-			continue
-		}
-		cpuMilli, memMi := sumPodUsage(pm.Object)
-		totalCPUMilli += cpuMilli
-		totalMemMi += memMi
-		podStats = append(podStats, map[string]interface{}{
-			"pod":        pod.Name,
-			"cpu_milli":  cpuMilli,
-			"memory_mib": memMi,
-		})
 	}
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"operator":          name,
 		"namespace":         namespace,
-		"metrics_available": metricsAvailable && len(podStats) > 0,
-		"pod_count":         len(podStats),
-		"total_cpu_milli":   totalCPUMilli,
-		"total_memory_mib":  totalMemMi,
-		"pods":              podStats,
+		"metrics_available": usage.Available,
+		"pod_count":         len(usage.Pods),
+		"total_cpu_milli":   usage.CPUMilli,
+		"total_memory_mib":  usage.MemMi,
+		"pods":              usage.Pods,
 	})
+}
+
+// controllerUsage is the aggregated live usage of an operator's controller pods.
+type controllerUsage struct {
+	CPUMilli  int64
+	MemMi     int64
+	Pods      []map[string]interface{}
+	Available bool
+}
+
+// gatherControllerUsage lists an operator's controller pods via the OLM label
+// and sums their real CPU/memory usage from metrics.k8s.io. Available is false
+// when the metrics API returned nothing usable (not installed / not yet scraped).
+func gatherControllerUsage(ctx context.Context, clientset *kubernetes.Clientset, dynClient dynamic.Interface, namespace, name string) (controllerUsage, error) {
+	pods, err := clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: "operators.coreos.com/" + name,
+	})
+	if err != nil {
+		return controllerUsage{}, fmt.Errorf("failed to list controller pods: %w", err)
+	}
+
+	u := controllerUsage{Pods: make([]map[string]interface{}, 0, len(pods.Items)), Available: true}
+	for _, pod := range pods.Items {
+		pm, merr := dynClient.Resource(podMetricsGVR).Namespace(namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+		if merr != nil {
+			u.Available = false
+			continue
+		}
+		cpuMilli, memMi := sumPodUsage(pm.Object)
+		u.CPUMilli += cpuMilli
+		u.MemMi += memMi
+		u.Pods = append(u.Pods, map[string]interface{}{
+			"pod":        pod.Name,
+			"cpu_milli":  cpuMilli,
+			"memory_mib": memMi,
+		})
+	}
+	u.Available = u.Available && len(u.Pods) > 0
+	return u, nil
+}
+
+// handleGetOperatorCost returns an estimated infrastructure cost footprint for
+// an operator's controller pods (Feature 10). It is a transparent estimate:
+// real CPU/memory usage from metrics.k8s.io multiplied by configurable hourly
+// rates (COST_CPU_CORE_HOUR / COST_MEM_GIB_HOUR). The rates used are returned in
+// the response, and the payload is explicitly flagged as an estimate so the UI
+// never presents these figures as billed amounts.
+func handleGetOperatorCost(w http.ResponseWriter, r *http.Request, clientset *kubernetes.Clientset, dynClient dynamic.Interface) {
+	namespace := r.URL.Query().Get("namespace")
+	name := r.URL.Query().Get("name")
+	if namespace == "" || name == "" {
+		http.Error(w, "Missing namespace or name", http.StatusBadRequest)
+		return
+	}
+
+	usage, err := gatherControllerUsage(context.Background(), clientset, dynClient, namespace, name)
+
+	w.Header().Set("Content-Type", "application/json")
+	if err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"metrics_available": false,
+			"message":           err.Error(),
+		})
+		return
+	}
+
+	cpuRate := getEnvFloat("COST_CPU_CORE_HOUR", 0.031) // ~ on-demand vCPU/hr
+	memRate := getEnvFloat("COST_MEM_GIB_HOUR", 0.004)  // ~ on-demand GiB/hr
+	const hoursPerMonth = 730.0
+
+	cpuCores := float64(usage.CPUMilli) / 1000.0
+	memGiB := float64(usage.MemMi) / 1024.0
+	hourly := cpuCores*cpuRate + memGiB*memRate
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"operator":          name,
+		"namespace":         namespace,
+		"estimate":          true,
+		"metrics_available": usage.Available,
+		"cpu_cores":         cpuCores,
+		"memory_gib":        memGiB,
+		"rates": map[string]interface{}{
+			"cpu_core_hour": cpuRate,
+			"mem_gib_hour":  memRate,
+		},
+		"hourly_cost":  hourly,
+		"monthly_cost": hourly * hoursPerMonth,
+		"currency":     "USD",
+	})
+}
+
+// getEnvFloat reads a float env var, falling back to def when unset/invalid.
+func getEnvFloat(key string, def float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
+	}
+	return def
 }
 
 // sumPodUsage aggregates CPU (milli-cores) and memory (MiB) across all
@@ -535,6 +612,9 @@ func main() {
 		})
 		http.HandleFunc("/api/v1/resources/metrics", func(w http.ResponseWriter, r *http.Request) {
 			handleGetControllerMetrics(w, r, clientset, dynClient)
+		})
+		http.HandleFunc("/api/v1/resources/cost", func(w http.ResponseWriter, r *http.Request) {
+			handleGetOperatorCost(w, r, clientset, dynClient)
 		})
 		http.HandleFunc("/api/v1/cves", handleGetAllCVEs)
 		http.HandleFunc("/api/v1/cves/", handleGetOperatorCVEs)

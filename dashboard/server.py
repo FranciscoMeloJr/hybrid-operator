@@ -235,6 +235,7 @@ def proxy_operator_actions():
 @app.route('/api/v1/resources/subscription')
 @app.route('/api/v1/resources/csv')
 @app.route('/api/v1/resources/metrics')
+@app.route('/api/v1/resources/cost')
 @requires_auth
 def proxy_operator_resources():
     return _proxy_to_operator()
