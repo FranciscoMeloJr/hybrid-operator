@@ -610,6 +610,7 @@ function updateOLMHealthStatus(data) {
     if (anomalyCountEl) {
       anomalyCountEl.textContent = anomalyCount;
     }
+    updateAnomalyBanner(anomalyCount);
 
     return;
   }
@@ -622,6 +623,7 @@ function updateOLMHealthStatus(data) {
   if (anomalyCountEl) {
     anomalyCountEl.textContent = anomalyCount;
   }
+  updateAnomalyBanner(anomalyCount);
 
   // Update health badge
   const healthBadge = document.getElementById('olmHealthBadge');
@@ -2464,6 +2466,22 @@ async function quickActionRestartPod(namespace, name) {
     alert(result.success ? `✓ ${result.message}` : `✗ ${result.message}`);
   } catch (err) {
     alert('Error: ' + err.message);
+  }
+}
+
+// Show the top anomaly banner only when real anomalies exist, with a count that
+// reflects the live backend data instead of a hardcoded sample figure.
+function updateAnomalyBanner(count) {
+  const banner = document.getElementById('anomalyBanner');
+  const text = document.getElementById('anomalyBannerText');
+  if (!banner) return;
+  if (count > 0) {
+    banner.classList.remove('hidden');
+    if (text) {
+      text.textContent = `The heuristic engine has detected ${count} silent OLM ${count === 1 ? 'anomaly' : 'anomalies'}.`;
+    }
+  } else {
+    banner.classList.add('hidden');
   }
 }
 
