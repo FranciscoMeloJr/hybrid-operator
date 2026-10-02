@@ -1766,6 +1766,10 @@ function openComponentModal(operatorName) {
   descEl.textContent = `Active ServiceAccounts, Deployments, Routes, and OLM Subscription metadata detected in namespace ${op.namespace}.`;
 
   const components = op.components || [];
+  // ServiceAccounts get their own section below; keep them out of the generic
+  // component list so they aren't rendered twice.
+  const serviceAccounts = op.service_accounts || [];
+  const infraComponents = components.filter(c => c.kind !== 'ServiceAccount');
 
   let html = `
     <div class="bg-gray-950 border border-gray-800 p-4 rounded-lg mb-4 grid grid-cols-2 gap-4 font-mono text-xs">
@@ -1780,13 +1784,31 @@ function openComponentModal(operatorName) {
     </div>
   `;
 
-  if (components.length === 0) {
+  // Dedicated ServiceAccounts section: group the operator's identities with a
+  // count rather than mixing them into the flat component list.
+  if (serviceAccounts.length > 0) {
+    html += `
+      <div class="space-y-2 mb-4">
+        <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+          <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+          Service Accounts (${serviceAccounts.length})
+        </div>
+        <div class="flex flex-wrap gap-2">
+          ${serviceAccounts.map(sa => `
+            <span class="bg-indigo-950 border border-indigo-800 text-indigo-300 px-2.5 py-1 rounded text-[11px] font-mono" title="Namespace: ${op.namespace}">${sa}</span>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  if (infraComponents.length === 0 && serviceAccounts.length === 0) {
     html += `<div class="text-gray-500 italic text-sm text-center py-6 bg-gray-950 rounded border border-gray-800">No active infrastructure deployments or components detected.</div>`;
-  } else {
+  } else if (infraComponents.length > 0) {
     html += `
       <div class="space-y-2">
-        <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Installed Components (${components.length})</div>
-        ${components.map(c => `
+        <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Infrastructure Components (${infraComponents.length})</div>
+        ${infraComponents.map(c => `
           <div class="bg-gray-950 border border-gray-800 p-3 rounded flex justify-between items-center text-xs font-mono hover:border-gray-700 transition">
             <div class="flex items-center gap-2">
               <span class="bg-blue-950 border border-blue-800 text-blue-300 px-2 py-0.5 rounded text-[10px] uppercase font-bold">${c.kind}</span>

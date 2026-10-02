@@ -444,13 +444,13 @@
           <tr class="hover:bg-gray-850/50 transition">
             <td class="px-4 py-4 text-center font-mono text-gray-500">31</td>
             <td class="px-4 py-4 font-bold text-white">Component Inspector & Resource Viewer</td>
-            <td class="px-4 py-4 text-gray-400">Deep-dive into operator infrastructure components: Deployments, ServiceAccounts, Pods, ConfigMaps, Secrets with live counts and namespaces.</td>
+            <td class="px-4 py-4 text-gray-400">Deep-dive into operator infrastructure components: Deployments, ServiceAccounts, Routes with live counts and namespaces. ServiceAccounts are grouped into a dedicated, counted section separate from the component list.</td>
             <td class="px-4 py-4">
               <span class="bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-medium inline-block">Completed</span>
             </td>
             <td class="px-4 py-4 text-center font-mono font-bold text-gray-300">5 SP</td>
-            <td class="px-4 py-4 text-xs">Added "Inspect Resources" button with modal showing categorized infrastructure components and counts.</td>
-            <td class="px-4 py-4 text-xs">Extended Go collector to query Deployments, ServiceAccounts, and other operator-owned resources via GVR.</td>
+            <td class="px-4 py-4 text-xs">Added "Inspect Resources" button with modal showing a dedicated Service Accounts section plus categorized infrastructure components and counts.</td>
+            <td class="px-4 py-4 text-xs">Extended Go collector to query Deployments, ServiceAccounts, and Routes via GVR; frontend splits ServiceAccounts into their own grouped view.</td>
           </tr>
 
           <!-- Feature 32 - COMPLETED -->
