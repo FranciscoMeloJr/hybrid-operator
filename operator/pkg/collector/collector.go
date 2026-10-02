@@ -4,6 +4,7 @@ import (
     "context"
     "fmt"
     "log"
+    "os"
     "regexp"
     "strconv"
     "strings"
@@ -12,6 +13,8 @@ import (
     "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
     "k8s.io/apimachinery/pkg/runtime/schema"
     "k8s.io/client-go/dynamic"
+
+    "hybrid-operator/pkg/security"
 )
 
 var (
@@ -551,6 +554,7 @@ func GetClusterGovernance(ctx context.Context, dynClient dynamic.Interface) (Clu
         op.EstDowntime = EstimateMaintenanceWindow(op, 3) // Assuming 3 worker node baseline
         op.RiskScore = CalculateSecurityRiskScore(op)
         op.HealthScore = CalculateHealthScore(op)
+        op.CVEs, op.CVECount = fetchOperatorCVEs(op.Package, op.Version)
 
         results = append(results, op)
     }
@@ -568,6 +572,37 @@ func GetClusterGovernance(ctx context.Context, dynClient dynamic.Interface) (Clu
         OLMHealth:         olmHealth,
         UpgradeFlow:       upgradeFlow,
     }, nil
+}
+
+// fetchOperatorCVEs resolves known CVEs for an operator package/version via the
+// security package. Defaults to the bundled mock dataset so the UI works without
+// external access; set CVE_SOURCE=redhat to query the live Red Hat Security Data
+// API (requires cluster egress to access.redhat.com).
+func fetchOperatorCVEs(pkg, version string) ([]CVEInfo, int) {
+    var raw []security.CVEInfo
+    var err error
+    if strings.EqualFold(os.Getenv("CVE_SOURCE"), "redhat") {
+        raw, err = security.FetchCVEsFromRedHat(pkg)
+    } else {
+        raw, err = security.GetCVEsForOperator(pkg, version)
+    }
+    if err != nil {
+        log.Printf("[CVE] lookup failed for %s@%s: %v", pkg, version, err)
+        return []CVEInfo{}, 0
+    }
+
+    cves := make([]CVEInfo, 0, len(raw))
+    for _, c := range raw {
+        cves = append(cves, CVEInfo{
+            ID:            c.ID,
+            Severity:      c.Severity,
+            Description:   c.Description,
+            FixedVersion:  c.FixedVersion,
+            PublishedDate: c.PublishedDate,
+            CVSS:          c.CVSS,
+        })
+    }
+    return cves, len(cves)
 }
 
 func DetectAnomalies(
