@@ -2481,19 +2481,49 @@ async function quickActionRestartPod(namespace, name) {
   }
 }
 
-// Show the top anomaly banner only when real anomalies exist, with a count that
-// reflects the live backend data instead of a hardcoded sample figure.
+// Keep the top banner always visible but honest: an amber warning with the live
+// anomaly count when problems exist, and a green "healthy" state when there are
+// none. No hardcoded sample figures.
 function updateAnomalyBanner(count) {
   const banner = document.getElementById('anomalyBanner');
+  const iconWrap = document.getElementById('anomalyBannerIconWrap');
+  const icon = document.getElementById('anomalyBannerIcon');
+  const title = document.getElementById('anomalyBannerTitle');
   const text = document.getElementById('anomalyBannerText');
+  const chevron = document.getElementById('chevron-anomalyBannerContent');
   if (!banner) return;
+
+  const amber = ['bg-amber-950/40', 'border-amber-800/60'];
+  const green = ['bg-emerald-950/40', 'border-emerald-800/60'];
+
   if (count > 0) {
-    banner.classList.remove('hidden');
+    banner.classList.remove(...green);
+    banner.classList.add(...amber);
+    if (iconWrap) iconWrap.className = 'bg-amber-900/50 p-2 rounded-full';
+    if (icon) icon.classList.replace('text-emerald-400', 'text-amber-400');
+    if (title) {
+      title.className = 'text-amber-400 font-bold text-sm';
+      title.textContent = 'Critical OLM Anomalies Detected';
+    }
     if (text) {
+      text.className = 'text-amber-200/70 text-xs mt-0.5';
       text.textContent = `The heuristic engine has detected ${count} silent OLM ${count === 1 ? 'anomaly' : 'anomalies'}.`;
     }
+    if (chevron) chevron.classList.replace('text-emerald-400', 'text-amber-400');
   } else {
-    banner.classList.add('hidden');
+    banner.classList.remove(...amber);
+    banner.classList.add(...green);
+    if (iconWrap) iconWrap.className = 'bg-emerald-900/50 p-2 rounded-full';
+    if (icon) icon.classList.replace('text-amber-400', 'text-emerald-400');
+    if (title) {
+      title.className = 'text-emerald-400 font-bold text-sm';
+      title.textContent = 'OLM Health: No Anomalies';
+    }
+    if (text) {
+      text.className = 'text-emerald-200/70 text-xs mt-0.5';
+      text.textContent = 'System healthy — no silent OLM anomalies detected.';
+    }
+    if (chevron) chevron.classList.replace('text-amber-400', 'text-emerald-400');
   }
 }
 
