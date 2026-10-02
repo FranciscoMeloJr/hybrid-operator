@@ -13,7 +13,10 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -244,6 +247,98 @@ func handleChangeChannel(w http.ResponseWriter, r *http.Request, dynClient dynam
 	})
 }
 
+// podMetricsGVR is the metrics.k8s.io resource exposing live pod CPU/memory
+// usage (served by metrics-server / the OpenShift metrics stack).
+var podMetricsGVR = schema.GroupVersionResource{
+	Group:    "metrics.k8s.io",
+	Version:  "v1beta1",
+	Resource: "pods",
+}
+
+// handleGetControllerMetrics returns live resource usage for an operator's
+// controller pods (Features 17 & 40). It finds the controller pods via the OLM
+// label, reads their real CPU/memory usage from metrics.k8s.io, and aggregates
+// per pod (milli-cores and MiB). Returns an availability flag so the UI can
+// distinguish "metrics API unavailable" from "no usage".
+func handleGetControllerMetrics(w http.ResponseWriter, r *http.Request, clientset *kubernetes.Clientset, dynClient dynamic.Interface) {
+	namespace := r.URL.Query().Get("namespace")
+	name := r.URL.Query().Get("name")
+	if namespace == "" || name == "" {
+		http.Error(w, "Missing namespace or name", http.StatusBadRequest)
+		return
+	}
+
+	ctx := context.Background()
+	pods, err := clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: "operators.coreos.com/" + name,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	if err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"metrics_available": false,
+			"message":           fmt.Sprintf("Failed to list controller pods: %v", err),
+		})
+		return
+	}
+
+	podStats := make([]map[string]interface{}, 0, len(pods.Items))
+	metricsAvailable := true
+	var totalCPUMilli, totalMemMi int64
+
+	for _, pod := range pods.Items {
+		pm, merr := dynClient.Resource(podMetricsGVR).Namespace(namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+		if merr != nil {
+			// metrics API not installed, or usage not yet scraped for this pod.
+			metricsAvailable = false
+			continue
+		}
+		cpuMilli, memMi := sumPodUsage(pm.Object)
+		totalCPUMilli += cpuMilli
+		totalMemMi += memMi
+		podStats = append(podStats, map[string]interface{}{
+			"pod":        pod.Name,
+			"cpu_milli":  cpuMilli,
+			"memory_mib": memMi,
+		})
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"operator":          name,
+		"namespace":         namespace,
+		"metrics_available": metricsAvailable && len(podStats) > 0,
+		"pod_count":         len(podStats),
+		"total_cpu_milli":   totalCPUMilli,
+		"total_memory_mib":  totalMemMi,
+		"pods":              podStats,
+	})
+}
+
+// sumPodUsage aggregates CPU (milli-cores) and memory (MiB) across all
+// containers of a metrics.k8s.io PodMetrics object.
+func sumPodUsage(podMetrics map[string]interface{}) (cpuMilli, memMi int64) {
+	containers, found, _ := unstructured.NestedSlice(podMetrics, "containers")
+	if !found {
+		return 0, 0
+	}
+	for _, c := range containers {
+		cMap, ok := c.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		cpuStr, _, _ := unstructured.NestedString(cMap, "usage", "cpu")
+		memStr, _, _ := unstructured.NestedString(cMap, "usage", "memory")
+		if q, err := resource.ParseQuantity(cpuStr); err == nil {
+			cpuMilli += q.MilliValue()
+		}
+		if q, err := resource.ParseQuantity(memStr); err == nil {
+			memMi += q.Value() / (1024 * 1024)
+		}
+	}
+	return cpuMilli, memMi
+}
+
 // CVE API Handlers
 func handleGetAllCVEs(w http.ResponseWriter, r *http.Request) {
 	cacheLock.RLock()
@@ -367,6 +462,9 @@ func main() {
 		})
 		http.HandleFunc("/api/v1/resources/csv", func(w http.ResponseWriter, r *http.Request) {
 			handleGetCSVYAML(w, r, dynClient)
+		})
+		http.HandleFunc("/api/v1/resources/metrics", func(w http.ResponseWriter, r *http.Request) {
+			handleGetControllerMetrics(w, r, clientset, dynClient)
 		})
 		http.HandleFunc("/api/v1/cves", handleGetAllCVEs)
 		http.HandleFunc("/api/v1/cves/", handleGetOperatorCVEs)

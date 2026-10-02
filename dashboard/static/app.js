@@ -1655,6 +1655,12 @@ function renderGrid(operators) {
                 </svg>
                 Switch Channel
               </button>
+              <button onclick="quickActionPodMetrics('${op.namespace}', '${op.name || op.package}')" class="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition flex items-center gap-2">
+                <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                </svg>
+                Pod Metrics
+              </button>
               <button onclick="quickActionCopyYAML('${op.namespace}', '${op.name || op.package}', 'subscription')" class="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition flex items-center gap-2">
                 <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
@@ -2458,6 +2464,30 @@ async function quickActionRestartPod(namespace, name) {
     alert(result.success ? `✓ ${result.message}` : `✗ ${result.message}`);
   } catch (err) {
     alert('Error: ' + err.message);
+  }
+}
+
+async function quickActionPodMetrics(namespace, name) {
+  try {
+    const response = await fetch(`/api/v1/resources/metrics?namespace=${encodeURIComponent(namespace)}&name=${encodeURIComponent(name)}`);
+    const result = await response.json();
+
+    if (!result.metrics_available) {
+      alert(`No live metrics for ${name}.\n\n${result.message || 'The cluster metrics API (metrics.k8s.io) returned no usage for this operator\'s controller pods.'}`);
+      return;
+    }
+
+    const lines = (result.pods || []).map(
+      p => `  • ${p.pod}: ${p.cpu_milli}m CPU, ${p.memory_mib} MiB`
+    );
+    alert(
+      `📊 Controller Pod Metrics — ${name}\n\n` +
+      `Pods: ${result.pod_count}\n` +
+      `Total: ${result.total_cpu_milli}m CPU, ${result.total_memory_mib} MiB\n\n` +
+      lines.join('\n')
+    );
+  } catch (err) {
+    alert('Error fetching metrics: ' + err.message);
   }
 }
 
